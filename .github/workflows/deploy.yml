@@ -1,0 +1,61 @@
+name: Deploy production
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: chaptera-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "09dddec241ef4667de55ef6ed48678374818ac76206d79e38b451f50e6de20d8  site/chaptera-landing-online-ready.zip" | sha256sum -c -
+          rm -rf .deploy
+          mkdir .deploy
+          unzip -q site/chaptera-landing-online-ready.zip -d .deploy
+          test -f .deploy/chaptera-landing/index.html
+          python -m json.tool .deploy/chaptera-landing/config.json >/dev/null
+          node --check .deploy/chaptera-landing/assets/site.js
+
+      - name: Configure SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Upload release
+        env:
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          USER: ${{ secrets.DEPLOY_USER }}
+          RELEASE: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          ssh "$USER@$HOST" "mkdir -p /var/www/chaptera/releases/$RELEASE"
+          rsync -az --delete .deploy/chaptera-landing/ "$USER@$HOST:/var/www/chaptera/releases/$RELEASE/"
+          ssh "$USER@$HOST" "rm -f /var/www/chaptera/current.new && ln -s /var/www/chaptera/releases/$RELEASE /var/www/chaptera/current.new && mv -Tf /var/www/chaptera/current.new /var/www/chaptera/current"
+          ssh "$USER@$HOST" "ls -1dt /var/www/chaptera/releases/* | tail -n +6 | xargs -r rm -rf"
+
+      - name: Production smoke
+        run: |
+          set -euo pipefail
+          curl -fsS https://chaptera.online/ >/dev/null
+          curl -fsS https://chaptera.online/reader/ >/dev/null
+          curl -fsS https://chaptera.online/privacy/ >/dev/null
