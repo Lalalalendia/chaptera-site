@@ -1,0 +1,32 @@
+name: Validate site artifact
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check canonical artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f site/chaptera-landing-online-ready.zip
+          echo "09dddec241ef4667de55ef6ed48678374818ac76206d79e38b451f50e6de20d8  site/chaptera-landing-online-ready.zip" | sha256sum -c -
+          rm -rf .site-check
+          mkdir .site-check
+          unzip -q site/chaptera-landing-online-ready.zip -d .site-check
+          root=".site-check/chaptera-landing"
+          test -f "$root/index.html"
+          python -m json.tool "$root/config.json" >/dev/null
+          node --check "$root/assets/site.js"
+          grep -q "https://chaptera.online" "$root/config.json"
+          grep -q "https://chaptera.online/reader/" "$root/sitemap.xml"
