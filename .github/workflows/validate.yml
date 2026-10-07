@@ -92,4 +92,13 @@ jobs:
           grep -q 'property="og:url" content="https://reader.chaptera.online/"' "$root/index.html"
           grep -q 'property="og:image" content="https://chaptera.online/social-preview.png"' "$root/index.html"
           grep -q 'name="twitter:card" content="summary_large_image"' "$root/index.html"
+          python - "$root/index.html" <<'PY'
+          from pathlib import Path
+          import sys
+
+          html = Path(sys.argv[1]).read_text()
+          head = html.split("</head>", 1)[0]
+          if "\\n" in head:
+              raise SystemExit("Cloud Reader mirror head contains literal backslash-n text")
+          PY
           cmp site/favicon.svg "$root/favicon.svg"
