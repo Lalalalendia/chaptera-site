@@ -209,7 +209,7 @@ jobs:
           curl -fsS -o /dev/null -D "${http_headers}" http://reader.chaptera.online/
           cat "${http_headers}"
           grep -Eq '^HTTP/[^ ]+ (301|308)' "${http_headers}"
-          grep -Eiq '^location: https://reader\.chaptera\.online/?([[:space:]]*) "${http_headers}"
+          grep -Fqi 'Location: https://reader.chaptera.online/' "${http_headers}"
 
           echo "=== live TLS certificate ==="
           openssl s_client             -connect reader.chaptera.online:443             -servername reader.chaptera.online             -verify_return_error             </dev/null 2>/dev/null             | openssl x509 -noout -subject -issuer -dates -ext subjectAltName
