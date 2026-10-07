@@ -200,3 +200,4 @@ jobs:
         run: |
           set -euo pipefail
           curl -fsS https://reader.chaptera.online/ | grep -q 'Chaptera'
+          curl -fsS https://reader.chaptera.online/favicon.svg | grep -q '#315EF5'
