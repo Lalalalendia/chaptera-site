@@ -78,7 +78,7 @@ fi
 nginx -t
 systemctl is-active --quiet chaptera-reader.service
 curl -fsS http://127.0.0.1:8080/live >/dev/null
-curl -fsS https://reader.chaptera.online/live >/dev/null
+curl -fsS https://reader.chaptera.online/ >/dev/null
 echo "chaptera-reader deploy complete: ${SHA}"
 EOF
 
