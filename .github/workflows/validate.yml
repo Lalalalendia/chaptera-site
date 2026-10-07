@@ -20,15 +20,20 @@ jobs:
         run: |
           set -euo pipefail
           cat site/artifact4k.b64.* | base64 -d > site/chaptera-landing-online-ready.zip
-          echo "09dddec241ef4667de55ef6ed48678374818ac76206d79e38b451f50e6de20d8  site/chaptera-landing-online-ready.zip" | sha256sum -c -
+          echo "3e43a2582a5871f716b04be8d82403ab28f13a8d3476c007d44c133692221e79  site/chaptera-landing-online-ready.zip" | sha256sum -c -
           rm -rf .site-check
           mkdir .site-check
           unzip -q site/chaptera-landing-online-ready.zip -d .site-check
           root=".site-check/chaptera-landing"
           test -f "$root/index.html"
+          test -f "$root/assets/favicon.svg"
           python -m json.tool "$root/config.json" >/dev/null
           node --check "$root/assets/site.js"
           grep -q "https://chaptera.online" "$root/config.json"
+          grep -q "https://reader.chaptera.online" "$root/config.json"
+          grep -q '"cloud_reader_available": false' "$root/config.json"
+          grep -q '"cloud_reader_privacy_ready": false' "$root/config.json"
+          grep -q "Technical Preview v2" "$root/config.json"
           grep -q "https://chaptera.online/reader/" "$root/sitemap.xml"
 
       - name: Validate Cloud Reader mirror
