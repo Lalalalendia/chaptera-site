@@ -92,6 +92,45 @@ jobs:
           printf '%s\n' "${SSH_KNOWN_HOSTS}" > ~/.ssh/known_hosts
           chmod 600 ~/.ssh/known_hosts
 
+      - name: Capture host preflight
+        env:
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          USER: ${{ secrets.DEPLOY_USER }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh "${USER}@${HOST}" '
+            set +e
+            echo "=== identity ==="
+            id
+            echo
+            echo "=== sudo ==="
+            sudo -n -l 2>&1
+            echo
+            echo "=== paths ==="
+            ls -ld /etc/nginx /etc/nginx/sites-available /etc/nginx/sites-enabled /etc/systemd/system /opt/chaptera /var/www/chaptera /var/www/chaptera/current 2>&1
+            echo
+            echo "=== dns ==="
+            getent ahostsv4 reader.chaptera.online 2>&1
+            echo
+            echo "=== listeners ==="
+            ss -ltn 2>&1
+            echo
+            echo "=== reader service ==="
+            systemctl --no-pager --full status chaptera-reader.service 2>&1
+            echo
+            echo "=== existing incoming ==="
+            find "$HOME/chaptera-reader-incoming" -maxdepth 2 -type f -printf "%p %s bytes\n" 2>&1
+          ' > host-preflight.txt
+
+      - name: Upload host preflight
+        uses: actions/upload-artifact@v4
+        with:
+          name: chaptera-reader-host-preflight
+          path: host-preflight.txt
+          if-no-files-found: error
+          retention-days: 7
+
       - name: Upload Reader packet and bootstrap
         env:
           HOST: ${{ secrets.DEPLOY_HOST }}
