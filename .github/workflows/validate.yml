@@ -25,21 +25,48 @@ jobs:
           mkdir .site-check
           unzip -q site/chaptera-landing-online-ready.zip -d .site-check
           install -m 0644 site/favicon.svg .site-check/chaptera-landing/assets/favicon.svg
+          install -m 0644 site/social-preview.png .site-check/chaptera-landing/social-preview.png
           python - <<'PY'
           import json
+          import re
           from pathlib import Path
 
-          config_path = Path(".site-check/chaptera-landing/config.json")
+          root = Path(".site-check/chaptera-landing")
+          config_path = root / "config.json"
           overrides = json.loads(Path("site/production-overrides.json").read_text())
           config = json.loads(config_path.read_text())
           config.update(overrides)
           config_path.write_text(json.dumps(config, ensure_ascii=False, indent=2) + "\n")
+
+          index_path = root / "index.html"
+          html = index_path.read_text()
+          html = re.sub(r'\s*<meta\s+name=["\']description["\'][^>]*>\s*', "\n", html, flags=re.I)
+          html = re.sub(r'\s*<link\s+rel=["\']canonical["\'][^>]*>\s*', "\n", html, flags=re.I)
+          html = re.sub(r'\s*<meta\s+(?:property|name)=["\'](?:og:[^"\']+|twitter:[^"\']+)["\'][^>]*>\s*', "\n", html, flags=re.I)
+          start = "<!-- chaptera-social-preview:start -->"
+          end = "<!-- chaptera-social-preview:end -->"
+          if start in html and end in html:
+              a = html.index(start)
+              b = html.index(end, a) + len(end)
+              html = html[:a] + html[b:]
+          social = Path("site/social-preview-meta.html").read_text().strip()
+          if "</head>" not in html:
+              raise SystemExit("landing index.html has no </head>")
+          html = html.replace("</head>", social + "\n</head>", 1)
+          index_path.write_text(html)
           PY
           root=".site-check/chaptera-landing"
           test -f "$root/index.html"
           test -f "$root/assets/favicon.svg"
+          test -f "$root/social-preview.png"
           cmp site/favicon.svg "$root/assets/favicon.svg"
+          cmp site/social-preview.png "$root/social-preview.png"
           grep -q 'rel="icon" type="image/svg+xml"' "$root/index.html"
+          grep -q 'property="og:title" content="Open Microsoft Publisher files online — Chaptera"' "$root/index.html"
+          grep -q 'property="og:image" content="https://chaptera.online/social-preview.png"' "$root/index.html"
+          grep -q 'property="og:image:width" content="1200"' "$root/index.html"
+          grep -q 'property="og:image:height" content="630"' "$root/index.html"
+          grep -q 'name="twitter:card" content="summary_large_image"' "$root/index.html"
           python -m json.tool "$root/config.json" >/dev/null
           node --check "$root/assets/site.js"
           grep -q "https://chaptera.online" "$root/config.json"
@@ -62,4 +89,7 @@ jobs:
           node --check "$root/render-v1.mjs"
           grep -q '/v1/reader/guest-sessions' "$root/reader-app.mjs"
           grep -q 'rel="icon" type="image/svg+xml" href="./favicon.svg"' "$root/index.html"
+          grep -q 'property="og:url" content="https://reader.chaptera.online/"' "$root/index.html"
+          grep -q 'property="og:image" content="https://chaptera.online/social-preview.png"' "$root/index.html"
+          grep -q 'name="twitter:card" content="summary_large_image"' "$root/index.html"
           cmp site/favicon.svg "$root/favicon.svg"

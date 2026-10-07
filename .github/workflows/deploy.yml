@@ -32,19 +32,43 @@ jobs:
           mkdir .deploy
           unzip -q site/chaptera-landing-online-ready.zip -d .deploy
           install -m 0644 site/favicon.svg .deploy/chaptera-landing/assets/favicon.svg
+          install -m 0644 site/social-preview.png .deploy/chaptera-landing/social-preview.png
           python - <<'PY'
           import json
+          import re
           from pathlib import Path
 
-          config_path = Path(".deploy/chaptera-landing/config.json")
+          root = Path(".deploy/chaptera-landing")
+          config_path = root / "config.json"
           overrides = json.loads(Path("site/production-overrides.json").read_text())
           config = json.loads(config_path.read_text())
           config.update(overrides)
           config_path.write_text(json.dumps(config, ensure_ascii=False, indent=2) + "\n")
+
+          index_path = root / "index.html"
+          html = index_path.read_text()
+          html = re.sub(r'\s*<meta\s+name=["\']description["\'][^>]*>\s*', "\n", html, flags=re.I)
+          html = re.sub(r'\s*<link\s+rel=["\']canonical["\'][^>]*>\s*', "\n", html, flags=re.I)
+          html = re.sub(r'\s*<meta\s+(?:property|name)=["\'](?:og:[^"\']+|twitter:[^"\']+)["\'][^>]*>\s*', "\n", html, flags=re.I)
+          start = "<!-- chaptera-social-preview:start -->"
+          end = "<!-- chaptera-social-preview:end -->"
+          if start in html and end in html:
+              a = html.index(start)
+              b = html.index(end, a) + len(end)
+              html = html[:a] + html[b:]
+          social = Path("site/social-preview-meta.html").read_text().strip()
+          if "</head>" not in html:
+              raise SystemExit("landing index.html has no </head>")
+          html = html.replace("</head>", social + "\n</head>", 1)
+          index_path.write_text(html)
           PY
           test -f .deploy/chaptera-landing/index.html
           test -f .deploy/chaptera-landing/assets/favicon.svg
+          test -f .deploy/chaptera-landing/social-preview.png
           cmp site/favicon.svg .deploy/chaptera-landing/assets/favicon.svg
+          cmp site/social-preview.png .deploy/chaptera-landing/social-preview.png
+          grep -q 'property="og:image" content="https://chaptera.online/social-preview.png"' .deploy/chaptera-landing/index.html
+          grep -q 'name="twitter:card" content="summary_large_image"' .deploy/chaptera-landing/index.html
           python -m json.tool .deploy/chaptera-landing/config.json >/dev/null
           node --check .deploy/chaptera-landing/assets/site.js
 
@@ -75,7 +99,8 @@ jobs:
       - name: Production smoke
         run: |
           set -euo pipefail
-          curl -fsS https://chaptera.online/ >/dev/null
+          curl -fsS https://chaptera.online/ | grep -q 'property="og:image" content="https://chaptera.online/social-preview.png"'
+          curl -fsSI https://chaptera.online/social-preview.png | grep -qi 'content-type: image/png'
           curl -fsS https://chaptera.online/reader/ >/dev/null
           curl -fsS https://chaptera.online/privacy/ >/dev/null
           curl -fsS https://reader.chaptera.online/ | grep -q 'Chaptera'
