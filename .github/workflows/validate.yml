@@ -30,3 +30,16 @@ jobs:
           node --check "$root/assets/site.js"
           grep -q "https://chaptera.online" "$root/config.json"
           grep -q "https://chaptera.online/reader/" "$root/sitemap.xml"
+
+      - name: Validate Cloud Reader mirror
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="cloud-reader/app"
+          for file in index.html reader.css reader-app.mjs reader-model.mjs render-v1.mjs; do
+            test -s "$root/$file"
+          done
+          node --check "$root/reader-app.mjs"
+          node --check "$root/reader-model.mjs"
+          node --check "$root/render-v1.mjs"
+          grep -q '/v1/reader/guest-sessions' "$root/reader-app.mjs"
