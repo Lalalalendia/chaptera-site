@@ -30,21 +30,228 @@ jobs:
         run: |
           set -euo pipefail
           api="https://api.github.com/repos/Lalalalendia/rar2/releases?per_page=30"
-          row="$(curl -fsSL -H 'Accept: application/vnd.github+json' "$api" | jq -r '
-            map(
-              select(.tag_name | startswith("cloud-reader-"))
-              | {
-                  tag: .tag_name,
-                  url: (.assets[]? | select(.name == "chaptera-cloud-reader-linux-amd64.tar.gz") | .browser_download_url)
-                }
-            )
-            | map(select(.url != null))
-            | first
-            | [.tag, .url]
-            | @tsv
-          ')"
-          tag="${row%%$'\t'*}"
-          url="${row#*$'\t'}"
+          row=""
+          for attempt in $(seq 1 30); do
+            row="$(curl -fsSL -H 'Accept: application/vnd.github+json' "$api" | jq -r '
+              map(
+                select(.tag_name | startswith("cloud-reader-"))
+                | {
+                    tag: .tag_name,
+                    url: (.assets[]? | select(.name == "chaptera-cloud-reader-linux-amd64.tar.gz") | .browser_download_url)
+                  }
+              )
+              | map(select(.url != null))
+              | first
+              | if . == null then "" else [.tag, .url] | @tsv end
+            ')"
+            if [[ -n "${row}" ]]; then
+              break
+            fi
+            echo "Reader release is not public yet (attempt ${attempt}/30); waiting 20s"
+            sleep 20
+          done
+          [[ -n "${row}" ]] || {
+            echo "::error::No public Cloud Reader release appeared within 10 minutes"
+            exit 1
+          }
+          tag="${row%%
+      - name: Download and verify release packet
+        env:
+          RELEASE_URL: ${{ steps.release.outputs.url }}
+          RELEASE_SHA: ${{ steps.release.outputs.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .reader-release/unpacked
+          curl -fsSL --retry 4 --retry-delay 2             "${RELEASE_URL}"             -o .reader-release/chaptera-cloud-reader-linux-amd64.tar.gz
+          tar -xzf .reader-release/chaptera-cloud-reader-linux-amd64.tar.gz             -C .reader-release/unpacked
+          (
+            cd .reader-release/unpacked
+            sha256sum -c SHA256SUMS
+            test "$(tr -d '\r\n' < COMMIT_SHA)" = "${RELEASE_SHA}"
+          )
+
+      - name: Configure SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "${SSH_PRIVATE_KEY}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "${SSH_KNOWN_HOSTS}" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Upload Reader packet and bootstrap
+        env:
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          USER: ${{ secrets.DEPLOY_USER }}
+          SHA: ${{ steps.release.outputs.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          slot="/home/${USER}/chaptera-reader-incoming/${SHA}"
+          ssh "${USER}@${HOST}" "mkdir -p '${slot}'"
+          scp .reader-release/chaptera-cloud-reader-linux-amd64.tar.gz             "${USER}@${HOST}:${slot}/chaptera-cloud-reader-linux-amd64.tar.gz"
+          scp cloud-reader/deploy/bootstrap-reader-deployer.sh             "${USER}@${HOST}:${slot}/bootstrap-reader-deployer.sh"
+
+      - name: Ensure restricted deploy bridge
+        env:
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          USER: ${{ secrets.DEPLOY_USER }}
+          SHA: ${{ steps.release.outputs.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          slot="/home/${USER}/chaptera-reader-incoming/${SHA}"
+          if ssh "${USER}@${HOST}"             "sudo -n /usr/local/sbin/chaptera-reader-deploy --version"             2>/dev/null | grep -q '^chaptera-reader-deploy-v1$'; then
+            exit 0
+          fi
+
+          ssh "${USER}@${HOST}" "
+            set -e
+            if sudo -n true 2>/dev/null; then
+              chmod 700 '${slot}/bootstrap-reader-deployer.sh'
+              sudo -n bash '${slot}/bootstrap-reader-deployer.sh' '${USER}'
+            else
+              echo 'ROOT_BOOTSTRAP_REQUIRED'
+              echo 'Run once as root: bash ${slot}/bootstrap-reader-deployer.sh ${USER}'
+              exit 90
+            fi
+          "
+
+      - name: Deploy Reader backend
+        env:
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          USER: ${{ secrets.DEPLOY_USER }}
+          SHA: ${{ steps.release.outputs.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="/home/${USER}/chaptera-reader-incoming/${SHA}/chaptera-cloud-reader-linux-amd64.tar.gz"
+          ssh "${USER}@${HOST}"             "sudo -n /usr/local/sbin/chaptera-reader-deploy '${SHA}' '${archive}'"
+
+      - name: Real PUB physical acceptance
+        env:
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          USER: ${{ secrets.DEPLOY_USER }}
+          SHA: ${{ steps.release.outputs.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          fixture_sha="ffed034ac87e679f0bd08ff9cf74ad11c0e0e510a42b1bc1a7502415f6c29c87"
+          curl -fsSL             https://raw.githubusercontent.com/apache/poi/942d95d85b15d0dfdb3bc9ba1b4f273f277757c8/test-data/publisher/SampleBrochure.pub             -o /tmp/chaptera-reader-acceptance.pub
+          echo "${fixture_sha}  /tmp/chaptera-reader-acceptance.pub" | sha256sum -c -
+          scp /tmp/chaptera-reader-acceptance.pub             "${USER}@${HOST}:/home/${USER}/chaptera-reader-acceptance.pub"
+          ssh "${USER}@${HOST}"             "python3 /opt/chaptera/current/run_cloud_reader_guest_host_acceptance.py               --fixture /home/${USER}/chaptera-reader-acceptance.pub               --out /home/${USER}/chaptera-reader-acceptance-${SHA}.json"
+
+      - name: Public smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS https://reader.chaptera.online/ | grep -q 'Chaptera'
+\t'*}"
+          url="${row#*
+      - name: Download and verify release packet
+        env:
+          RELEASE_URL: ${{ steps.release.outputs.url }}
+          RELEASE_SHA: ${{ steps.release.outputs.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .reader-release/unpacked
+          curl -fsSL --retry 4 --retry-delay 2             "${RELEASE_URL}"             -o .reader-release/chaptera-cloud-reader-linux-amd64.tar.gz
+          tar -xzf .reader-release/chaptera-cloud-reader-linux-amd64.tar.gz             -C .reader-release/unpacked
+          (
+            cd .reader-release/unpacked
+            sha256sum -c SHA256SUMS
+            test "$(tr -d '\r\n' < COMMIT_SHA)" = "${RELEASE_SHA}"
+          )
+
+      - name: Configure SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "${SSH_PRIVATE_KEY}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "${SSH_KNOWN_HOSTS}" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Upload Reader packet and bootstrap
+        env:
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          USER: ${{ secrets.DEPLOY_USER }}
+          SHA: ${{ steps.release.outputs.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          slot="/home/${USER}/chaptera-reader-incoming/${SHA}"
+          ssh "${USER}@${HOST}" "mkdir -p '${slot}'"
+          scp .reader-release/chaptera-cloud-reader-linux-amd64.tar.gz             "${USER}@${HOST}:${slot}/chaptera-cloud-reader-linux-amd64.tar.gz"
+          scp cloud-reader/deploy/bootstrap-reader-deployer.sh             "${USER}@${HOST}:${slot}/bootstrap-reader-deployer.sh"
+
+      - name: Ensure restricted deploy bridge
+        env:
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          USER: ${{ secrets.DEPLOY_USER }}
+          SHA: ${{ steps.release.outputs.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          slot="/home/${USER}/chaptera-reader-incoming/${SHA}"
+          if ssh "${USER}@${HOST}"             "sudo -n /usr/local/sbin/chaptera-reader-deploy --version"             2>/dev/null | grep -q '^chaptera-reader-deploy-v1$'; then
+            exit 0
+          fi
+
+          ssh "${USER}@${HOST}" "
+            set -e
+            if sudo -n true 2>/dev/null; then
+              chmod 700 '${slot}/bootstrap-reader-deployer.sh'
+              sudo -n bash '${slot}/bootstrap-reader-deployer.sh' '${USER}'
+            else
+              echo 'ROOT_BOOTSTRAP_REQUIRED'
+              echo 'Run once as root: bash ${slot}/bootstrap-reader-deployer.sh ${USER}'
+              exit 90
+            fi
+          "
+
+      - name: Deploy Reader backend
+        env:
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          USER: ${{ secrets.DEPLOY_USER }}
+          SHA: ${{ steps.release.outputs.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="/home/${USER}/chaptera-reader-incoming/${SHA}/chaptera-cloud-reader-linux-amd64.tar.gz"
+          ssh "${USER}@${HOST}"             "sudo -n /usr/local/sbin/chaptera-reader-deploy '${SHA}' '${archive}'"
+
+      - name: Real PUB physical acceptance
+        env:
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          USER: ${{ secrets.DEPLOY_USER }}
+          SHA: ${{ steps.release.outputs.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          fixture_sha="ffed034ac87e679f0bd08ff9cf74ad11c0e0e510a42b1bc1a7502415f6c29c87"
+          curl -fsSL             https://raw.githubusercontent.com/apache/poi/942d95d85b15d0dfdb3bc9ba1b4f273f277757c8/test-data/publisher/SampleBrochure.pub             -o /tmp/chaptera-reader-acceptance.pub
+          echo "${fixture_sha}  /tmp/chaptera-reader-acceptance.pub" | sha256sum -c -
+          scp /tmp/chaptera-reader-acceptance.pub             "${USER}@${HOST}:/home/${USER}/chaptera-reader-acceptance.pub"
+          ssh "${USER}@${HOST}"             "python3 /opt/chaptera/current/run_cloud_reader_guest_host_acceptance.py               --fixture /home/${USER}/chaptera-reader-acceptance.pub               --out /home/${USER}/chaptera-reader-acceptance-${SHA}.json"
+
+      - name: Public smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS https://reader.chaptera.online/ | grep -q 'Chaptera'
+\t'}"
           sha="${tag#cloud-reader-}"
           [[ "${sha}" =~ ^[0-9a-f]{40}$ ]]
           [[ "${url}" == https://github.com/Lalalalendia/rar2/releases/download/* ]]
