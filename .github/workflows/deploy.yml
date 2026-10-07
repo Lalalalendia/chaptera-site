@@ -1,6 +1,11 @@
 name: Deploy production
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'site/**'
+      - '.github/workflows/deploy.yml'
   workflow_dispatch:
 
 permissions:
@@ -22,11 +27,12 @@ jobs:
         run: |
           set -euo pipefail
           cat site/artifact4k.b64.* | base64 -d > site/chaptera-landing-online-ready.zip
-          echo "09dddec241ef4667de55ef6ed48678374818ac76206d79e38b451f50e6de20d8  site/chaptera-landing-online-ready.zip" | sha256sum -c -
+          echo "3e43a2582a5871f716b04be8d82403ab28f13a8d3476c007d44c133692221e79  site/chaptera-landing-online-ready.zip" | sha256sum -c -
           rm -rf .deploy
           mkdir .deploy
           unzip -q site/chaptera-landing-online-ready.zip -d .deploy
           test -f .deploy/chaptera-landing/index.html
+          test -f .deploy/chaptera-landing/assets/favicon.svg
           python -m json.tool .deploy/chaptera-landing/config.json >/dev/null
           node --check .deploy/chaptera-landing/assets/site.js
 

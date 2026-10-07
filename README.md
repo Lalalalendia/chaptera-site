@@ -4,9 +4,11 @@ Private deployment repository for https://chaptera.online.
 
 ## Canonical landing artifact
 
-The exact verified landing archive is stored as Git-friendly Base64 chunks:
+Production landing is **Chaptera Landing v2**.
 
-`site/artifact4k.b64.00` … `site/artifact4k.b64.07`
+The exact verified archive is stored as Git-friendly Base64 chunks:
+
+`site/artifact4k.b64.00` … `site/artifact4k.b64.04`
 
 CI reconstructs:
 
@@ -14,15 +16,22 @@ CI reconstructs:
 
 and requires SHA-256:
 
-`09dddec241ef4667de55ef6ed48678374818ac76206d79e38b451f50e6de20d8`
+`3e43a2582a5871f716b04be8d82403ab28f13a8d3476c007d44c133692221e79`
 
-The archive contains the static landing, Reader hub, privacy/FAQ/supported/report routes, and the fail-closed future Cloud Reader configuration.
+V2 is the product-first editorial landing: warm paper/ink/cobalt visual system, dominant Open PUB action, Reader/product proof in the hero, Windows Reader secondary route, and the existing Reader/Editor/Supported/Privacy/FAQ/Report routes.
+
+The browser Reader URL is already wired to `https://reader.chaptera.online`, but the landing remains fail-closed until physical Reader acceptance is green:
+
+- `cloud_reader_available = false`
+- `cloud_reader_privacy_ready = false`
+
+This allows the v2 marketing surface to ship independently without exposing a backend that has not completed physical acceptance.
 
 ## Workflows
 
-- `validate.yml` runs on every push/PR and verifies the reconstructed archive hash, JSON, JavaScript syntax, domain and Reader sitemap route.
-- `deploy.yml` is intentionally manual until production SSH secrets are configured.
-- After the first successful production smoke, it can be switched to automatic deploy on pushes to `main`.
+- `validate.yml` runs on every push/PR and verifies the reconstructed archive hash, JSON, JavaScript syntax, v2 config gates, domain and Reader sitemap route.
+- `deploy.yml` performs the production release to FirstVDS and is manually dispatched.
+- Reader browser/backend deployment is separate from the marketing landing release.
 
 Required Actions secrets:
 
