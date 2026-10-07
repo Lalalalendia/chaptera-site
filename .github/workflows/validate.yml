@@ -89,4 +89,7 @@ jobs:
           node --check "$root/render-v1.mjs"
           grep -q '/v1/reader/guest-sessions' "$root/reader-app.mjs"
           grep -q 'rel="icon" type="image/svg+xml" href="./favicon.svg"' "$root/index.html"
+          grep -q 'property="og:url" content="https://reader.chaptera.online/"' "$root/index.html"
+          grep -q 'property="og:image" content="https://chaptera.online/social-preview.png"' "$root/index.html"
+          grep -q 'name="twitter:card" content="summary_large_image"' "$root/index.html"
           cmp site/favicon.svg "$root/favicon.svg"
