@@ -1,0 +1,63 @@
+name: Deploy Cloud Reader static surface
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "cloud-reader/app/**"
+      - ".github/workflows/deploy-reader-static.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: chaptera-reader-static-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate Reader static surface
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="cloud-reader/app"
+          for file in index.html reader.css reader-app.mjs reader-model.mjs render-v1.mjs; do
+            test -s "$root/$file"
+          done
+          node --check "$root/reader-app.mjs"
+          node --check "$root/reader-model.mjs"
+          node --check "$root/render-v1.mjs"
+          grep -q '/v1/reader/guest-sessions' "$root/reader-app.mjs"
+
+      - name: Configure SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Publish Reader assets into current site release
+        env:
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          USER: ${{ secrets.DEPLOY_USER }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh "$USER@$HOST" "test -L /var/www/chaptera/current && mkdir -p /var/www/chaptera/current/cloud-reader"
+          rsync -az --delete cloud-reader/app/ "$USER@$HOST:/var/www/chaptera/current/cloud-reader/"
+
+      - name: Static smoke
+        run: |
+          set -euo pipefail
+          curl -fsS https://chaptera.online/cloud-reader/ | grep -q 'Chaptera'
