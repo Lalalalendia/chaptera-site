@@ -20,17 +20,18 @@ and requires SHA-256:
 
 V2 is the product-first editorial landing: warm paper/ink/cobalt visual system, dominant Open PUB action, Reader/product proof in the hero, Windows Reader secondary route, and the existing Reader/Editor/Supported/Privacy/FAQ/Report routes.
 
-The browser Reader URL is already wired to `https://reader.chaptera.online`, but the landing remains fail-closed until physical Reader acceptance is green:
+The canonical Landing v2 ZIP remains a fail-closed base artifact. Production applies `site/production-overrides.json` after unpacking. Cloud Reader physical acceptance is now green, so the production overlay enables the browser Reader:
 
-- `cloud_reader_available = false`
-- `cloud_reader_privacy_ready = false`
+- `cloud_reader_url = https://reader.chaptera.online`
+- `cloud_reader_available = true`
+- `cloud_reader_privacy_ready = true`
 
-This allows the v2 marketing surface to ship independently without exposing a backend that has not completed physical acceptance.
+Keeping the gates as a production overlay preserves the immutable v2 base artifact while ensuring future site deploys do not accidentally close an accepted Reader.
 
 ## Workflows
 
-- `validate.yml` runs on every push/PR and verifies the reconstructed archive hash, JSON, JavaScript syntax, v2 config gates, domain and Reader sitemap route.
-- `deploy.yml` performs the production release to FirstVDS and is manually dispatched.
+- `validate.yml` runs on every push/PR, reconstructs the immutable base archive, applies the production override, and verifies JSON, JavaScript syntax, live Reader gates, domain and Reader sitemap route.
+- `deploy.yml` reconstructs the same base archive, applies the production override, releases to FirstVDS, and smokes both the site and public Cloud Reader.
 - Reader browser/backend deployment is separate from the marketing landing release.
 
 Required Actions secrets:

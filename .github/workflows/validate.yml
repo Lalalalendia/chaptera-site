@@ -24,6 +24,16 @@ jobs:
           rm -rf .site-check
           mkdir .site-check
           unzip -q site/chaptera-landing-online-ready.zip -d .site-check
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          config_path = Path(".site-check/chaptera-landing/config.json")
+          overrides = json.loads(Path("site/production-overrides.json").read_text())
+          config = json.loads(config_path.read_text())
+          config.update(overrides)
+          config_path.write_text(json.dumps(config, ensure_ascii=False, indent=2) + "\n")
+          PY
           root=".site-check/chaptera-landing"
           test -f "$root/index.html"
           test -f "$root/assets/favicon.svg"
@@ -31,8 +41,8 @@ jobs:
           node --check "$root/assets/site.js"
           grep -q "https://chaptera.online" "$root/config.json"
           grep -q "https://reader.chaptera.online" "$root/config.json"
-          grep -q '"cloud_reader_available": false' "$root/config.json"
-          grep -q '"cloud_reader_privacy_ready": false' "$root/config.json"
+          grep -q '"cloud_reader_available": true' "$root/config.json"
+          grep -q '"cloud_reader_privacy_ready": true' "$root/config.json"
           grep -q "Technical Preview v2" "$root/config.json"
           grep -q "https://chaptera.online/reader/" "$root/sitemap.xml"
 
