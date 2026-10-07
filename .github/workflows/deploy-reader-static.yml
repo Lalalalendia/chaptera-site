@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - "cloud-reader/app/**"
+      - "site/favicon.svg"
       - ".github/workflows/deploy-reader-static.yml"
   workflow_dispatch:
 
@@ -27,13 +28,15 @@ jobs:
         run: |
           set -euo pipefail
           root="cloud-reader/app"
-          for file in index.html reader.css reader-app.mjs reader-model.mjs render-v1.mjs; do
+          for file in favicon.svg index.html reader.css reader-app.mjs reader-model.mjs render-v1.mjs; do
             test -s "$root/$file"
           done
           node --check "$root/reader-app.mjs"
           node --check "$root/reader-model.mjs"
           node --check "$root/render-v1.mjs"
           grep -q '/v1/reader/guest-sessions' "$root/reader-app.mjs"
+          grep -q 'rel="icon" type="image/svg+xml" href="./favicon.svg"' "$root/index.html"
+          cmp site/favicon.svg "$root/favicon.svg"
 
       - name: Configure SSH
         env:

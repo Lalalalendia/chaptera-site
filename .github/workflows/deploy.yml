@@ -31,6 +31,7 @@ jobs:
           rm -rf .deploy
           mkdir .deploy
           unzip -q site/chaptera-landing-online-ready.zip -d .deploy
+          install -m 0644 site/favicon.svg .deploy/chaptera-landing/assets/favicon.svg
           python - <<'PY'
           import json
           from pathlib import Path
@@ -43,6 +44,7 @@ jobs:
           PY
           test -f .deploy/chaptera-landing/index.html
           test -f .deploy/chaptera-landing/assets/favicon.svg
+          cmp site/favicon.svg .deploy/chaptera-landing/assets/favicon.svg
           python -m json.tool .deploy/chaptera-landing/config.json >/dev/null
           node --check .deploy/chaptera-landing/assets/site.js
 

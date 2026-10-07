@@ -24,6 +24,7 @@ jobs:
           rm -rf .site-check
           mkdir .site-check
           unzip -q site/chaptera-landing-online-ready.zip -d .site-check
+          install -m 0644 site/favicon.svg .site-check/chaptera-landing/assets/favicon.svg
           python - <<'PY'
           import json
           from pathlib import Path
@@ -37,6 +38,8 @@ jobs:
           root=".site-check/chaptera-landing"
           test -f "$root/index.html"
           test -f "$root/assets/favicon.svg"
+          cmp site/favicon.svg "$root/assets/favicon.svg"
+          grep -q 'rel="icon" type="image/svg+xml"' "$root/index.html"
           python -m json.tool "$root/config.json" >/dev/null
           node --check "$root/assets/site.js"
           grep -q "https://chaptera.online" "$root/config.json"
@@ -51,10 +54,12 @@ jobs:
         run: |
           set -euo pipefail
           root="cloud-reader/app"
-          for file in index.html reader.css reader-app.mjs reader-model.mjs render-v1.mjs; do
+          for file in favicon.svg index.html reader.css reader-app.mjs reader-model.mjs render-v1.mjs; do
             test -s "$root/$file"
           done
           node --check "$root/reader-app.mjs"
           node --check "$root/reader-model.mjs"
           node --check "$root/render-v1.mjs"
           grep -q '/v1/reader/guest-sessions' "$root/reader-app.mjs"
+          grep -q 'rel="icon" type="image/svg+xml" href="./favicon.svg"' "$root/index.html"
+          cmp site/favicon.svg "$root/favicon.svg"
