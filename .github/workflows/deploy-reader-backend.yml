@@ -37,11 +37,12 @@ jobs:
                 select(.tag_name | startswith("cloud-reader-"))
                 | {
                     tag: .tag_name,
+                    published_at: .published_at,
                     url: (.assets[]? | select(.name == "chaptera-cloud-reader-linux-amd64.tar.gz") | .browser_download_url)
                   }
               )
-              | map(select(.url != null))
-              | first
+              | map(select(.url != null and .published_at != null))
+              | max_by(.published_at)
               | if . == null then "" else [.tag, .url] | @tsv end
             ')"
             if [[ -n "${row}" ]]; then
