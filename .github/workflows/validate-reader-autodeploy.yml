@@ -76,6 +76,7 @@ jobs:
           grep -Fq 'Real public accepted edit and elapsed one-hour cleanup' "$ttl"
           ! grep -Fq 'secrets.' "$ttl"
           grep -Fq 'SLIDING_TTL_MS = 3_600_000' "$script"
+          grep -Fq 'headers["Origin"] = ORIGIN' "$script"
           grep -Fq 'expired_current not in {404, 410}' "$script"
           grep -Fq 'identifier_or_bearer_emitted": False' "$script"
           python3 -m py_compile "$script"
