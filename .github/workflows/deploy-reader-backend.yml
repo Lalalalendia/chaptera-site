@@ -57,7 +57,7 @@ jobs:
               first(.[] |
                 select(.draft == false and .prerelease == false) |
                 select(.tag_name | test("^cloud-reader-[0-9a-f]{40}$")) |
-                select(.assets | any(.name == "chaptera-cloud-reader-linux-amd64.tar.gz")) ||
+                select(.assets | any(.name == "chaptera-cloud-reader-linux-amd64.tar.gz")) |
                 .tag_name)')"
             sha="${tag#cloud-reader-}"
           fi
