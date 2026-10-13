@@ -1,13 +1,13 @@
 name: Deploy Cloud Reader backend
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "cloud-reader/deploy/**"
-      - "cloud-reader/tools/**"
-      - ".github/workflows/deploy-reader-backend.yml"
+  # Production mutates a real host. Merge/push must never install "latest".
   workflow_dispatch:
+    inputs:
+      release_sha:
+        description: "Exact 40-hex rar2 main commit SHA of the intended Cloud Reader packet"
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -24,42 +24,31 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Resolve latest public Reader release
+      - name: Resolve explicitly pinned Reader release
         id: release
+        env:
+          PINNED_RELEASE_SHA: ${{ inputs.release_sha }}
         shell: bash
         run: |
           set -euo pipefail
-          api="https://api.github.com/repos/Lalalalendia/rar2/releases?per_page=30"
-          row=""
-          for attempt in $(seq 1 30); do
-            row="$(curl -fsSL -H 'Accept: application/vnd.github+json' "$api" | jq -r '
-              map(
-                select(.tag_name | startswith("cloud-reader-"))
-                | {
-                    tag: .tag_name,
-                    published_at: .published_at,
-                    url: (.assets[]? | select(.name == "chaptera-cloud-reader-linux-amd64.tar.gz") | .browser_download_url)
-                  }
-              )
-              | map(select(.url != null and .published_at != null))
-              | max_by(.published_at)
-              | if . == null then "" else [.tag, .url] | @tsv end
-            ')"
-            if [[ -n "${row}" ]]; then
-              break
-            fi
-            echo "Reader release is not public yet (attempt ${attempt}/30); waiting 20s"
-            sleep 20
-          done
-          [[ -n "${row}" ]] || {
-            echo "::error::No public Cloud Reader release appeared within 10 minutes"
+          sha="${PINNED_RELEASE_SHA}"
+          [[ "${sha}" =~ ^[0-9a-f]{40}$ ]] || {
+            echo "::error::Production release_sha must be an exact 40-hex rar2 commit SHA"
             exit 1
           }
-          tag="$(printf '%s\n' "${row}" | cut -f1)"
-          url="$(printf '%s\n' "${row}" | cut -f2-)"
-          sha="${tag#cloud-reader-}"
-          [[ "${sha}" =~ ^[0-9a-f]{40}$ ]]
-          [[ "${url}" == https://github.com/Lalalalendia/rar2/releases/download/* ]]
+          tag="cloud-reader-${sha}"
+          # Resolve this exact immutable release. Never fall back to newest:
+          # another agent can publish a newer rar2 packet meanwhile.
+          release_url="https://api.github.com/repos/Lalalalendia/rar2/releases/tags/${tag}"
+          release_json="$(curl -fsSL -H 'Accept: application/vnd.github+json' "${release_url}")"
+          printf '%s\n' "${release_json}" | jq -e --arg tag "${tag}" \
+            '.tag_name == $tag and .draft == false' >/dev/null
+          url="$(printf '%s\n' "${release_json}" | jq -er \
+            'first(.assets[] | select(.name == "chaptera-cloud-reader-linux-amd64.tar.gz") | .browser_download_url)')"
+          [[ "${url}" == "https://github.com/Lalalalendia/rar2/releases/download/${tag}/chaptera-cloud-reader-linux-amd64.tar.gz" ]] || {
+            echo "::error::Pinned Reader release has an unexpected asset location"
+            exit 1
+          }
           echo "tag=${tag}" >> "${GITHUB_OUTPUT}"
           echo "sha=${sha}" >> "${GITHUB_OUTPUT}"
           echo "url=${url}" >> "${GITHUB_OUTPUT}"
@@ -217,3 +206,44 @@ jobs:
           echo "=== HTTPS content ==="
           curl -fsS https://reader.chaptera.online/ | grep -q 'Chaptera'
           curl -fsS https://reader.chaptera.online/favicon.svg | grep -q '#315EF5'
+
+          echo "=== Public temporary guest editor path allowlist ==="
+          allowed=(
+            /editor/temporary-preview
+            /editor/temporary-editor-preview.mjs
+            /editor/temporary-editor-preview.css
+            /editor/temporary-edit-browser-session-v0.mjs
+            /editor/temporary-edit-move-client-v1.mjs
+            /editor/interaction-v1.mjs
+            /editor/reader-scene-editor-interaction-v1.mjs
+            /cloud-reader/render-v1.mjs
+          )
+          for path in "${allowed[@]}"; do
+            actual="$(curl --silent --show-error --max-time 20 \
+              --output /dev/null --write-out '%{http_code}' \
+              "https://reader.chaptera.online${path}")"
+            [[ "${actual}" == 200 ]] || {
+              echo "::error::Public guest static path ${path} returned ${actual}, expected 200"
+              exit 1
+            }
+          done
+
+          echo "=== Public Product/OIDC/unlisted surface denylist ==="
+          blocked=(
+            /editor/product-editor-entry-v1.mjs
+            /editor/temporary-preview-other
+            /v1/editor/projects
+            /v1/auth/session
+          )
+          for path in "${blocked[@]}"; do
+            actual="$(curl --silent --show-error --max-time 20 \
+              --output /dev/null --write-out '%{http_code}' \
+              "https://reader.chaptera.online${path}")"
+            [[ "${actual}" == 404 ]] || {
+              echo "::error::Private/unlisted path ${path} returned ${actual}, expected 404"
+              exit 1
+            }
+          done
+          # This HTTP smoke does not replace clean-browser real PUB upload,
+          # single MoveNode, physical IDML/PDF consumer, TTL and DELETE proof.
+
