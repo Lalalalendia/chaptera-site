@@ -1,0 +1,73 @@
+name: Validate Cloud Reader auto-deploy policy
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/deploy-reader-backend.yml"
+      - ".github/workflows/validate-reader-autodeploy.yml"
+      - "cloud-reader/deploy/bootstrap-reader-deployer.sh"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/deploy-reader-backend.yml"
+      - ".github/workflows/validate-reader-autodeploy.yml"
+      - "cloud-reader/deploy/bootstrap-reader-deployer.sh"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Guard automatic deployment trust boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          workflow=".github/workflows/deploy-reader-backend.yml"
+
+          grep -Fq 'cron: "*/10 * * * *"' "$workflow"
+          grep -Fq 'workflow_dispatch:' "$workflow"
+          grep -Fq '.target_commitish == $sha' "$workflow"
+          grep -Fq 'compare/${sha}...main' "$workflow"
+          grep -Fq '.behind_by == 0' "$workflow"
+          grep -Fq 'select(.draft == false and .prerelease == false)' "$workflow"
+          grep -Fq 'chaptera-cloud-reader-linux-amd64.tar.gz' "$workflow"
+          grep -Fq "steps.current.outputs.already_current != 'true'" "$workflow"
+          grep -Fq 'readlink -f /opt/chaptera/current' "$workflow"
+          grep -Fq 'environment: production' "$workflow"
+          ! grep -Fq 'workflow_run:' "$workflow"
+
+      - name: Resolve current public immutable packet without deploying
+        shell: bash
+        run: |
+          set -euo pipefail
+          releases="$(curl -fsSL --retry 4 --retry-delay 2             -H 'Accept: application/vnd.github+json'             'https://api.github.com/repos/Lalalalendia/rar2/releases?per_page=30')"
+          tag="$(printf '%s\n' "$releases" | jq -er '
+            first(.[] |
+              select(.draft == false and .prerelease == false) |
+              select(.tag_name | test("^cloud-reader-[0-9a-f]{40}$")) |
+              select(.assets | any(.name == "chaptera-cloud-reader-linux-amd64.tar.gz" and
+                (.digest | strings | startswith("sha256:")))) |
+              .tag_name)')"
+          sha="${tag#cloud-reader-}"
+          [[ "$sha" =~ ^[0-9a-f]{40}$ ]]
+
+          exact="$(curl -fsSL --retry 4 --retry-delay 2             -H 'Accept: application/vnd.github+json'             "https://api.github.com/repos/Lalalalendia/rar2/releases/tags/$tag")"
+          printf '%s\n' "$exact" | jq -e --arg tag "$tag" --arg sha "$sha" '
+            .tag_name == $tag and .draft == false and .prerelease == false and
+            .target_commitish == $sha and
+            (.assets | any(.name == "chaptera-cloud-reader-linux-amd64.tar.gz" and
+              (.digest | strings | startswith("sha256:"))))
+          ' >/dev/null
+
+          compare="$(curl -fsSL --retry 4 --retry-delay 2             -H 'Accept: application/vnd.github+json'             "https://api.github.com/repos/Lalalalendia/rar2/compare/$sha...main")"
+          printf '%s\n' "$compare" | jq -e '
+            .behind_by == 0 and (.status == "ahead" or .status == "identical")
+          ' >/dev/null
+
+          echo "Validated auto-deploy candidate $tag"
