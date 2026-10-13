@@ -1,0 +1,85 @@
+name: Temporary Editor production one-hour TTL acceptance
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/reader-production-ttl-acceptance.yml"
+      - "cloud-reader/acceptance/production_temporary_ttl.py"
+      - ".github/workflows/validate-reader-autodeploy.yml"
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: chaptera-temporary-v0-production-ttl
+  cancel-in-progress: false
+
+jobs:
+  ttl:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve exact public immutable Reader release
+        id: release
+        shell: bash
+        run: |
+          set -euo pipefail
+          releases="$(curl -fsSL --retry 4 --retry-delay 2 \
+            -H 'Accept: application/vnd.github+json' \
+            'https://api.github.com/repos/Lalalalendia/rar2/releases?per_page=30')"
+          tag="$(printf '%s\n' "${releases}" | jq -er '
+            [.[] |
+              select(.draft == false and .published_at != null) |
+              select(.tag_name | test("^cloud-reader-[0-9a-f]{40}$")) |
+              select(.assets | any(.name == "chaptera-cloud-reader-linux-amd64.tar.gz"))
+            ] | max_by(.published_at) | .tag_name')"
+          sha="${tag#cloud-reader-}"
+          [[ "${sha}" =~ ^[0-9a-f]{40}$ ]]
+          compare="$(curl -fsSL --retry 4 --retry-delay 2 \
+            -H 'Accept: application/vnd.github+json' \
+            "https://api.github.com/repos/Lalalalendia/rar2/compare/${sha}...main")"
+          printf '%s\n' "${compare}" | jq -e '
+            .behind_by == 0 and (.status == "ahead" or .status == "identical")
+          ' >/dev/null
+          echo "sha=${sha}" >> "${GITHUB_OUTPUT}"
+
+      - name: Fail closed if public assets are not the selected release
+        env:
+          RELEASE_SHA: ${{ steps.release.outputs.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          work="$(mktemp -d)"
+          trap 'rm -rf "${work}"' EXIT
+          for script in temporary-editor-preview.mjs temporary-edit-browser-session-v0.mjs; do
+            curl -fsSL --retry 3 \
+              "https://raw.githubusercontent.com/Lalalalendia/rar2/${RELEASE_SHA}/apps/web/${script}" \
+              -o "${work}/expected"
+            curl -fsSL --max-time 20 -H 'Cache-Control: no-cache' \
+              "https://reader.chaptera.online/editor/${script}" \
+              -o "${work}/actual"
+            cmp "${work}/expected" "${work}/actual"
+          done
+
+      - name: Syntax-check source-safe TTL witness
+        run: python3 -m py_compile cloud-reader/acceptance/production_temporary_ttl.py
+
+      - name: Real public accepted edit and elapsed one-hour cleanup
+        env:
+          RELEASE_SHA: ${{ steps.release.outputs.sha }}
+          TTL_RECEIPT: ${{ runner.temp }}/temporary-v0-ttl.json
+        run: python3 cloud-reader/acceptance/production_temporary_ttl.py
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: chaptera-temporary-v0-production-ttl-${{ steps.release.outputs.sha }}
+          path: ${{ runner.temp }}/temporary-v0-ttl.json
+          if-no-files-found: error
+          retention-days: 14
