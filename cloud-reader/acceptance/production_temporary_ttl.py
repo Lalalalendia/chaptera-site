@@ -37,6 +37,10 @@ def request(method: str, path: str, *, body: bytes | None = None,
             token: str | None = None, csrf: str | None = None,
             content_type: str | None = None, timeout: int = 150) -> tuple[int, bytes]:
     headers = {"Accept": "application/json", "Cache-Control": "no-store"}
+    # EdgePolicy requires a same-origin browser provenance header on every
+    # unsafe method. The real Chromium UI supplies this automatically.
+    if method in {"POST", "PUT", "PATCH", "DELETE"}:
+        headers["Origin"] = ORIGIN
     if token:
         headers["x-chaptera-reader-session"] = token
     if csrf:
