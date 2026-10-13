@@ -451,7 +451,17 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          first_session=true
           for target in pdf idml; do
+            if [[ "${first_session}" != true ]]; then
+              # Two complete anonymous editor journeys from one GitHub runner
+              # intentionally share the production IP rate-limit subject.
+              # Respect the documented 60-second ReaderSessionOpen window
+              # instead of weakening the server policy for a CI-only pattern.
+              echo "Waiting for public Reader rate-limit window before second independent session"
+              sleep 65
+            fi
+            first_session=false
             node tools/run_temporary_editor_real_pub_browser.mjs \
               --public-origin --origin "${PUBLIC_ORIGIN}" \
               --fixture "${RUNNER_TEMP}/public-v0/fixture.pub" \
