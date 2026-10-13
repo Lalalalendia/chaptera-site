@@ -6,12 +6,16 @@ on:
       - ".github/workflows/deploy-reader-backend.yml"
       - ".github/workflows/validate-reader-autodeploy.yml"
       - "cloud-reader/deploy/bootstrap-reader-deployer.sh"
+      - ".github/workflows/reader-production-ttl-acceptance.yml"
+      - "cloud-reader/acceptance/production_temporary_ttl.py"
   push:
     branches: [main]
     paths:
       - ".github/workflows/deploy-reader-backend.yml"
       - ".github/workflows/validate-reader-autodeploy.yml"
       - "cloud-reader/deploy/bootstrap-reader-deployer.sh"
+      - ".github/workflows/reader-production-ttl-acceptance.yml"
+      - "cloud-reader/acceptance/production_temporary_ttl.py"
   workflow_dispatch:
 
 permissions:
@@ -58,6 +62,23 @@ jobs:
           grep -Fq 'chaptera.public-auto-deploy-context.v1' "$workflow"
           grep -Fq "'harness_sha': os.environ['HARNESS_SHA']" "$workflow"
           grep -Fq 'source-free-context.json' "$workflow"
+
+      - name: Guard production Temporary Editor TTL witness
+        shell: bash
+        run: |
+          set -euo pipefail
+          ttl=".github/workflows/reader-production-ttl-acceptance.yml"
+          script="cloud-reader/acceptance/production_temporary_ttl.py"
+          grep -Fq 'cron: "17 3 * * *"' "$ttl"
+          grep -Fq 'timeout-minutes: 75' "$ttl"
+          grep -Fq 'max_by(.published_at)' "$ttl"
+          grep -Fq 'https://reader.chaptera.online' "$ttl"
+          grep -Fq 'Real public accepted edit and elapsed one-hour cleanup' "$ttl"
+          ! grep -Fq 'secrets.' "$ttl"
+          grep -Fq 'SLIDING_TTL_MS = 3_600_000' "$script"
+          grep -Fq 'expired_current not in {404, 410}' "$script"
+          grep -Fq 'identifier_or_bearer_emitted": False' "$script"
+          python3 -m py_compile "$script"
 
       - name: Resolve current public immutable packet without deploying
         shell: bash
