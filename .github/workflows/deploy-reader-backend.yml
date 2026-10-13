@@ -244,6 +244,45 @@ jobs:
               exit 1
             }
           done
-          # This HTTP smoke does not replace clean-browser real PUB upload,
-          # single MoveNode, physical IDML/PDF consumer, TTL and DELETE proof.
+          # HTTP 200 cannot prove that Nginx serves assets from the chosen
+          # Chaptera Rust build; verify the actual public bytes separately.
+
+      - name: Verify publicly served guest scripts match exact deployed rar2 commit
+        env:
+          RELEASE_SHA: ${{ steps.release.outputs.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "${RELEASE_SHA}" =~ ^[0-9a-f]{40}$ ]]
+          work="$(mktemp -d)"
+          trap 'rm -rf "${work}"' EXIT
+          # Product Editor assets (including this Guest subset) are Rust
+          # include_bytes!, not static files deployed by chaptera-site.
+          # Fail closed if Nginx is still serving an older binary or cache.
+          for script in \
+            temporary-editor-preview.mjs \
+            temporary-edit-browser-session-v0.mjs \
+            temporary-edit-move-client-v1.mjs \
+            interaction-v1.mjs \
+            reader-scene-editor-interaction-v1.mjs
+          do
+            curl --fail --location --silent --show-error --retry 3 \
+              "https://raw.githubusercontent.com/Lalalalendia/rar2/${RELEASE_SHA}/apps/web/${script}" \
+              --output "${work}/expected"
+            curl --fail --silent --show-error --max-time 20 \
+              -H 'Cache-Control: no-cache' \
+              "https://reader.chaptera.online/editor/${script}" \
+              --output "${work}/actual"
+            if ! cmp --silent "${work}/expected" "${work}/actual"; then
+              echo "::error::Public script ${script} is not from selected rar2 release_sha"
+              exit 1
+            fi
+            echo "Verified public guest script identity: ${script}"
+          done
+          # Source-neutral receipts only: publish SHA and module names,
+          # never private source bytes, guest tokens or session IDs.
+          echo "Public guest static assets match release ${RELEASE_SHA}"
+          # Full public browser upload/edit/IDML+PDF/delete stays a separate
+          # operator acceptance gate; no production GO inferred here.
+
 
