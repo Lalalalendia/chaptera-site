@@ -54,11 +54,11 @@ jobs:
               -H 'Accept: application/vnd.github+json' \
               'https://api.github.com/repos/Lalalalendia/rar2/releases?per_page=30')"
             tag="$(printf '%s\n' "${releases}" | jq -er '
-              first(.[] |
-                select(.draft == false) |
+              [.[] |
+                select(.draft == false and .published_at != null) |
                 select(.tag_name | test("^cloud-reader-[0-9a-f]{40}$")) |
-                select(.assets | any(.name == "chaptera-cloud-reader-linux-amd64.tar.gz")) |
-                .tag_name)')"
+                select(.assets | any(.name == "chaptera-cloud-reader-linux-amd64.tar.gz"))
+              ] | max_by(.published_at) | .tag_name')"
             sha="${tag#cloud-reader-}"
           fi
 
