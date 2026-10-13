@@ -387,7 +387,7 @@ jobs:
   public-acceptance:
     name: Public Chromium edit/export/delete
     needs: deploy
-    if: needs.deploy.result == 'success' && needs.deploy.outputs.already_current != 'true'
+    if: needs.deploy.result == 'success' && (needs.deploy.outputs.already_current != 'true' || github.event_name == 'push')
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     env:
