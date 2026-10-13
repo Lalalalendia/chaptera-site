@@ -42,6 +42,17 @@ jobs:
           grep -Fq 'readlink -f /opt/chaptera/current' "$workflow"
           grep -Fq 'environment: production' "$workflow"
           ! grep -Fq 'workflow_run:' "$workflow"
+          grep -Fq 'outputs:' "$workflow"
+          grep -Fq 'release_sha: ${{ steps.release.outputs.sha }}' "$workflow"
+          grep -Fq 'public-acceptance:' "$workflow"
+          grep -Fq "needs: deploy" "$workflow"
+          grep -Fq "needs.deploy.outputs.already_current != 'true'" "$workflow"
+          grep -Fq 'repository: Lalalalendia/rar2' "$workflow"
+          grep -Fq -- '--public-origin' "$workflow"
+          grep -Fq 'run_temporary_editor_real_pub_browser.mjs' "$workflow"
+          grep -Fq 'for target in idml pdf' "$workflow"
+          grep -Fq 'same_browser_session_delete_proven' "$workflow"
+          grep -Fq 'revoked_old_current_scene_export_denied' "$workflow"
 
       - name: Resolve current public immutable packet without deploying
         shell: bash
