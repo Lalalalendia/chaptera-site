@@ -55,6 +55,9 @@ jobs:
           grep -Fq 'public Reader rate-limit window before second independent session' "$workflow"
           grep -Fq 'same_browser_session_delete_proven' "$workflow"
           grep -Fq 'revoked_old_current_scene_export_denied' "$workflow"
+          grep -Fq 'chaptera.public-auto-deploy-context.v1' "$workflow"
+          grep -Fq "'harness_sha': os.environ['HARNESS_SHA']" "$workflow"
+          grep -Fq 'source-free-context.json' "$workflow"
 
       - name: Resolve current public immutable packet without deploying
         shell: bash

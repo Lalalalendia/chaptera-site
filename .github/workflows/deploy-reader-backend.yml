@@ -447,6 +447,7 @@ jobs:
           npx playwright install --with-deps chromium
 
       - name: Real public Chromium MoveNode with IDML and PDF consumers
+        id: browser
         working-directory: rar2-harness
         shell: bash
         run: |
@@ -470,7 +471,34 @@ jobs:
               --out "${RUNNER_TEMP}/public-v0/${target}.json"
           done
 
+      - name: Record source-neutral acceptance identity
+        if: always()
+        env:
+          HARNESS_SHA: ${{ steps.harness.outputs.sha }}
+          BROWSER_OUTCOME: ${{ steps.browser.outcome }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "${RELEASE_SHA}" =~ ^[0-9a-f]{40}$ ]]
+          [[ "${HARNESS_SHA}" =~ ^[0-9a-f]{40}$ ]]
+          mkdir -p "${RUNNER_TEMP}/public-v0"
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          root = Path(os.environ["RUNNER_TEMP"]) / "public-v0"
+          context = {
+              "schema": "chaptera.public-auto-deploy-context.v1",
+              "release_sha": os.environ["RELEASE_SHA"],
+              "harness_sha": os.environ["HARNESS_SHA"],
+              "browser_outcome": os.environ["BROWSER_OUTCOME"],
+          }
+          (root / "source-free-context.json").write_text(
+              json.dumps(context, indent=2, sort_keys=True) + "\n")
+          PY
+
       - name: Require public edit export reload and DELETE receipts
+        env:
+          HARNESS_SHA: ${{ steps.harness.outputs.sha }}
         shell: bash
         run: |
           set -euo pipefail
@@ -498,6 +526,7 @@ jobs:
               'schema': 'chaptera.public-auto-deploy-acceptance.v1',
               'status': 'PASS',
               'release_sha': os.environ['RELEASE_SHA'],
+              'harness_sha': os.environ['HARNESS_SHA'],
               'targets': ['idml', 'pdf'],
               'trusted_public_https': True,
               'edit_reload_delete': True,
@@ -512,7 +541,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: chaptera-public-auto-deploy-acceptance-${{ needs.deploy.outputs.release_sha }}
-          path: ${{ runner.temp }}/public-v0/source-free-summary.json
-          if-no-files-found: ignore
+          path: |
+            ${{ runner.temp }}/public-v0/source-free-context.json
+            ${{ runner.temp }}/public-v0/source-free-summary.json
+          if-no-files-found: error
           retention-days: 14
 
