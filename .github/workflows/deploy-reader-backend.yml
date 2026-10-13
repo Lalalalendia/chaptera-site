@@ -55,7 +55,7 @@ jobs:
               'https://api.github.com/repos/Lalalalendia/rar2/releases?per_page=30')"
             tag="$(printf '%s\n' "${releases}" | jq -er '
               first(.[] |
-                select(.draft == false and .prerelease == false) |
+                select(.draft == false) |
                 select(.tag_name | test("^cloud-reader-[0-9a-f]{40}$")) |
                 select(.assets | any(.name == "chaptera-cloud-reader-linux-amd64.tar.gz")) |
                 .tag_name)')"
@@ -69,7 +69,7 @@ jobs:
           release_json="$(curl -fsSL --retry 4 --retry-delay 2 \
             -H 'Accept: application/vnd.github+json' "${release_url}")"
           printf '%s\n' "${release_json}" | jq -e --arg tag "${tag}" --arg sha "${sha}" '
-            .tag_name == $tag and .draft == false and .prerelease == false and
+            .tag_name == $tag and .draft == false and
             .target_commitish == $sha and
             (.assets | any(.name == "chaptera-cloud-reader-linux-amd64.tar.gz" and
               (.digest | strings | startswith("sha256:"))))
