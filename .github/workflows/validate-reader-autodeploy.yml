@@ -50,7 +50,7 @@ jobs:
           grep -Fq 'repository: Lalalalendia/rar2' "$workflow"
           grep -Fq -- '--public-origin' "$workflow"
           grep -Fq 'run_temporary_editor_real_pub_browser.mjs' "$workflow"
-          grep -Fq 'for target in idml pdf' "$workflow"
+          grep -Eq 'for target in (idml pdf|pdf idml); do' "$workflow"
           grep -Fq 'same_browser_session_delete_proven' "$workflow"
           grep -Fq 'revoked_old_current_scene_export_denied' "$workflow"
 
