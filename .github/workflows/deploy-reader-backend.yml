@@ -29,6 +29,9 @@ jobs:
     runs-on: ubuntu-24.04
     environment: production
     timeout-minutes: 25
+    outputs:
+      release_sha: ${{ steps.release.outputs.sha }}
+      already_current: ${{ steps.current.outputs.already_current }}
     steps:
       - uses: actions/checkout@v4
 
@@ -381,5 +384,125 @@ jobs:
               echo "- result: deployment path executed; preceding steps are authoritative"
             fi
           } >> "${GITHUB_STEP_SUMMARY}"
+  public-acceptance:
+    name: Public Chromium edit/export/delete
+    needs: deploy
+    if: needs.deploy.result == 'success' && needs.deploy.outputs.already_current != 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      RELEASE_SHA: ${{ needs.deploy.outputs.release_sha }}
+      PUBLIC_ORIGIN: https://reader.chaptera.online
+      FIXTURE_SHA256: 6a825ba26ba35d6e885acdc62e859591ed37cb0ff7480b554b9cb362b644dfcf
+    steps:
+      - name: Resolve protected rar2 acceptance harness
+        id: harness
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "${RELEASE_SHA}" =~ ^[0-9a-f]{40}$ ]]
+          harness_sha="$(curl -fsSL --retry 4 --retry-delay 2 \
+            -H 'Accept: application/vnd.github+json' \
+            https://api.github.com/repos/Lalalalendia/rar2/commits/main | jq -er .sha)"
+          [[ "${harness_sha}" =~ ^[0-9a-f]{40}$ ]]
+          echo "sha=${harness_sha}" >> "${GITHUB_OUTPUT}"
+          release_json="$(curl -fsSL --retry 4 --retry-delay 2 \
+            -H 'Accept: application/vnd.github+json' \
+            "https://api.github.com/repos/Lalalalendia/rar2/releases/tags/cloud-reader-${RELEASE_SHA}")"
+          printf '%s\n' "${release_json}" | jq -e --arg sha "${RELEASE_SHA}" '
+            .draft == false and .target_commitish == $sha and
+            (.assets | any(.name == "chaptera-cloud-reader-linux-amd64.tar.gz"))
+          ' >/dev/null
 
+      - name: Check out exact protected rar2 acceptance harness
+        uses: actions/checkout@v4
+        with:
+          repository: Lalalalendia/rar2
+          ref: ${{ steps.harness.outputs.sha }}
+          path: rar2-harness
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Verify public acceptance harness and fetch pinned PUB
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq -- '--public-origin' rar2-harness/tools/run_temporary_editor_real_pub_browser.mjs
+          mkdir -p "${RUNNER_TEMP}/public-v0"
+          curl -fsSL --retry 4 --retry-delay 2 --max-time 100 \
+            https://raw.githubusercontent.com/apache/poi/942d95d85b15d0dfdb3bc9ba1b4f273f277757c8/test-data/publisher/SampleNewsletter.pub \
+            -o "${RUNNER_TEMP}/public-v0/fixture.pub"
+          echo "${FIXTURE_SHA256}  ${RUNNER_TEMP}/public-v0/fixture.pub" | sha256sum -c -
+          test "$(stat -c '%s' "${RUNNER_TEMP}/public-v0/fixture.pub")" = "291840"
+
+      - name: Install pinned Chromium
+        working-directory: rar2-harness
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --no-save playwright@1.55.0
+          npx playwright install --with-deps chromium
+
+      - name: Real public Chromium MoveNode with IDML and PDF consumers
+        working-directory: rar2-harness
+        shell: bash
+        run: |
+          set -euo pipefail
+          for target in idml pdf; do
+            node tools/run_temporary_editor_real_pub_browser.mjs \
+              --public-origin --origin "${PUBLIC_ORIGIN}" \
+              --fixture "${RUNNER_TEMP}/public-v0/fixture.pub" \
+              --fixture-sha256 "${FIXTURE_SHA256}" \
+              --target "${target}" \
+              --out "${RUNNER_TEMP}/public-v0/${target}.json"
+          done
+
+      - name: Require public edit export reload and DELETE receipts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          root = Path(os.environ['RUNNER_TEMP']) / 'public-v0'
+          for target in ('idml', 'pdf'):
+              receipt = json.loads((root / f'{target}.json').read_text())
+              assert receipt['status'] == 'PASS'
+              assert receipt['deployment_mode'] == 'public_trusted_origin'
+              assert receipt['public_trusted_tls'] is True
+              assert receipt['tls_caddy'] is False
+              assert receipt['export_target'] == target
+              assert receipt['browser_pointer_commits'] == 1
+              for key in ('exact_source_bound_revision', 'revised_scene_on_reload',
+                          'same_browser_session_delete_proven',
+                          'revoked_old_current_scene_export_denied',
+                          'temporary_bearer_cleared_after_delete',
+                          'original_pub_immutable', 'bearer_absent_from_urls'):
+                  assert receipt[key] is True, key
+              assert receipt[f'changed_{target}_geometry_proven'] is True
+              assert receipt['v0_go'] is False
+          summary = {
+              'schema': 'chaptera.public-auto-deploy-acceptance.v1',
+              'status': 'PASS',
+              'release_sha': os.environ['RELEASE_SHA'],
+              'targets': ['idml', 'pdf'],
+              'trusted_public_https': True,
+              'edit_reload_delete': True,
+              'v0_go': False,
+          }
+          (root / 'source-free-summary.json').write_text(
+              json.dumps(summary, indent=2, sort_keys=True) + '\n')
+          PY
+
+      - name: Upload source-neutral public acceptance receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: chaptera-public-auto-deploy-acceptance-${{ needs.deploy.outputs.release_sha }}
+          path: ${{ runner.temp }}/public-v0/source-free-summary.json
+          if-no-files-found: ignore
+          retention-days: 14
 
