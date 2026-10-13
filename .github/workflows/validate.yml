@@ -102,3 +102,15 @@ jobs:
               raise SystemExit("Cloud Reader mirror head contains literal backslash-n text")
           PY
           cmp site/favicon.svg "$root/favicon.svg"
+
+      - name: Guard manual public Guest Chromium workflow and source-free evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile cloud-reader/tools/prepare_public_guest_browser.py cloud-reader/tools/verify_public_guest_receipts.py
+          python cloud-reader/tools/test_prepare_public_guest_browser.py
+          python cloud-reader/tools/test_verify_public_guest_receipts.py
+          grep -q 'workflow_dispatch:' .github/workflows/public-guest-editor-acceptance.yml
+          ! grep -Eq '^  (push|pull_request|schedule):' .github/workflows/public-guest-editor-acceptance.yml
+          grep -q 'environment: production' .github/workflows/public-guest-editor-acceptance.yml
+          grep -q 'ignoreHTTPSErrors: false' cloud-reader/tools/prepare_public_guest_browser.py

@@ -1,0 +1,197 @@
+name: Public FirstVDS temporary editor browser acceptance
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_sha:
+        description: "Exact deployed 40-hex rar2 Cloud Reader release SHA"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: chaptera-public-guest-editor-acceptance
+  cancel-in-progress: false
+
+jobs:
+  public-chromium:
+    runs-on: ubuntu-24.04
+    environment: production
+    timeout-minutes: 45
+    env:
+      RELEASE_SHA: ${{ inputs.release_sha }}
+      PUBLIC_ORIGIN: https://reader.chaptera.online
+      FIXTURE_SHA256: 6a825ba26ba35d6e885acdc62e859591ed37cb0ff7480b554b9cb362b644dfcf
+    steps:
+      - name: Check out deployment tests
+        uses: actions/checkout@v4
+        with:
+          path: site
+          persist-credentials: false
+
+      - name: Verify immutable published release before any guest traffic
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]] || {
+            echo "::error::Expected an exact rar2 40-hex release SHA"
+            exit 1
+          }
+          tag="cloud-reader-$RELEASE_SHA"
+          curl -fsSL --retry 3 -H 'Accept: application/vnd.github+json' \
+            "https://api.github.com/repos/Lalalalendia/rar2/releases/tags/$tag" \
+            -o "$RUNNER_TEMP/guest-release.json"
+          jq -e --arg sha "$RELEASE_SHA" --arg tag "$tag" '
+            .tag_name == $tag and .draft == false and .target_commitish == $sha and
+            (.assets | any(.name == "chaptera-cloud-reader-linux-amd64.tar.gz" and
+              (.digest | strings | startswith("sha256:"))))
+          ' "$RUNNER_TEMP/guest-release.json" >/dev/null
+
+      - name: Check out exact release source and accepted browser oracles
+        uses: actions/checkout@v4
+        with:
+          repository: Lalalalendia/rar2
+          ref: ${{ inputs.release_sha }}
+          path: upstream
+          persist-credentials: false
+
+      - name: Confirm checked-out rar2 SHA
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$(git -C upstream rev-parse HEAD)" == "$RELEASE_SHA" ]]
+
+      - name: Configure restricted read-only production SSH
+        shell: bash
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$SSH_PRIVATE_KEY"
+          test -n "$SSH_KNOWN_HOSTS"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Verify installed FirstVDS SHA before creating test sessions
+        shell: bash
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+        run: |
+          set -euo pipefail
+          test -n "$DEPLOY_HOST"
+          test -n "$DEPLOY_USER"
+          actual="$(ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            "$DEPLOY_USER@$DEPLOY_HOST" 'readlink -f /opt/chaptera/current')"
+          [[ "$actual" == "/opt/chaptera/releases/$RELEASE_SHA" ]] || {
+            echo "::error::FirstVDS runs a different release SHA"
+            exit 1
+          }
+
+      - name: Verify trusted live HTTPS guest allowlist and Product denylist
+        shell: bash
+        run: |
+          set -euo pipefail
+          # No -k, hosts-file overrides, local Caddy CA or off-origin redirects.
+          curl -fsS --max-time 25 --proto '=https' "$PUBLIC_ORIGIN/" -o /dev/null
+          for route in \
+            /editor/temporary-preview \
+            /editor/temporary-editor-preview.mjs \
+            /editor/temporary-editor-preview.css \
+            /editor/temporary-edit-browser-session-v0.mjs \
+            /editor/temporary-edit-move-client-v1.mjs \
+            /editor/interaction-v1.mjs \
+            /editor/reader-scene-editor-interaction-v1.mjs \
+            /cloud-reader/render-v1.mjs; do
+            status="$(curl -sS --max-time 25 --proto '=https' \
+              -o /dev/null -w '%{http_code}' "$PUBLIC_ORIGIN$route")"
+            [[ "$status" == 200 ]] || {
+              echo "::error::Guest route blocked: $route ($status)"
+              exit 1
+            }
+          done
+          for route in /editor/product-editor-entry-v1.mjs \
+            /editor/temporary-preview-other /v1/editor/projects /v1/auth/session; do
+            status="$(curl -sS --max-time 25 --proto '=https' \
+              -o /dev/null -w '%{http_code}' "$PUBLIC_ORIGIN$route")"
+            [[ "$status" == 404 ]] || {
+              echo "::error::Private route exposed: $route ($status)"
+              exit 1
+            }
+          done
+
+      - name: Download and verify pinned public SampleNewsletter PUB
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/public-guest"
+          curl -fsSL --retry 4 --retry-delay 2 \
+            'https://raw.githubusercontent.com/apache/poi/942d95d85b15d0dfdb3bc9ba1b4f273f277757c8/test-data/publisher/SampleNewsletter.pub' \
+            -o "$RUNNER_TEMP/public-guest/source.pub"
+          printf '%s  %s\n' "$FIXTURE_SHA256" "$RUNNER_TEMP/public-guest/source.pub" \
+            | sha256sum --check -
+          test "$(stat -c '%s' "$RUNNER_TEMP/public-guest/source.pub")" = 291840
+
+      - name: Install exact physical Chromium test runtime
+        shell: bash
+        working-directory: upstream
+        run: |
+          set -euo pipefail
+          npm install --no-save playwright@1.55.0
+          npx playwright install --with-deps chromium
+
+      - name: Derive trusted-production consumer from exact rar2 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          python site/cloud-reader/tools/prepare_public_guest_browser.py \
+            --upstream upstream/tools/run_temporary_editor_real_pub_browser.mjs \
+            --output upstream/tools/run_public_temporary_editor_browser.mjs
+          node --check upstream/tools/run_public_temporary_editor_browser.mjs
+
+      - name: Real Chromium anonymous PUB MoveNode, revised IDML and DELETE
+        shell: bash
+        working-directory: upstream
+        run: |
+          set -euo pipefail
+          node tools/run_public_temporary_editor_browser.mjs \
+            --origin "$PUBLIC_ORIGIN" \
+            --fixture "$RUNNER_TEMP/public-guest/source.pub" \
+            --fixture-sha256 "$FIXTURE_SHA256" --target idml \
+            --out "$RUNNER_TEMP/public-guest/idml.json"
+
+      - name: Real Chromium anonymous PUB MoveNode, revised PDF and DELETE
+        shell: bash
+        working-directory: upstream
+        run: |
+          set -euo pipefail
+          # Fresh guest session: all source/export bytes remain on this runner.
+          node tools/run_public_temporary_editor_browser.mjs \
+            --origin "$PUBLIC_ORIGIN" \
+            --fixture "$RUNNER_TEMP/public-guest/source.pub" \
+            --fixture-sha256 "$FIXTURE_SHA256" --target pdf \
+            --out "$RUNNER_TEMP/public-guest/pdf.json"
+
+      - name: Validate independent IDML and PDF receipts without claiming V0 GO
+        shell: bash
+        run: |
+          set -euo pipefail
+          python site/cloud-reader/tools/verify_public_guest_receipts.py \
+            --release-sha "$RELEASE_SHA" --fixture-sha "$FIXTURE_SHA256" \
+            --idml "$RUNNER_TEMP/public-guest/idml.json" \
+            --pdf "$RUNNER_TEMP/public-guest/pdf.json" \
+            --output "$RUNNER_TEMP/public-guest/source-free-summary.json"
+
+      - name: Retain only source-free production acceptance receipt
+        uses: actions/upload-artifact@v4
+        with:
+          name: chaptera-public-firstvds-temp-editor-consumer
+          path: ${{ runner.temp }}/public-guest/source-free-summary.json
+          if-no-files-found: error
+          retention-days: 14

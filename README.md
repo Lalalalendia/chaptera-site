@@ -50,3 +50,38 @@ Deployment layout:
 ├── releases/<git-sha>/
 └── current -> releases/<git-sha>/
 ```
+
+
+## Temporary PUB Editor — production consumer acceptance
+
+The anonymous Temporary Editor V0 is served by the Rust backend deployed through
+the **separate**, explicitly pinned `Deploy Cloud Reader backend` workflow.
+Merging source, publishing a Linux packet or installing it on FirstVDS is **not**
+a complete public release receipt.
+
+Run [Public FirstVDS temporary editor browser acceptance](.github/workflows/public-guest-editor-acceptance.yml)
+**manually** only after the protected backend deploy has successfully installed
+the exact intended `rar2` release SHA. The production environment and existing
+read-only SSH preflight must be authorized by the operator. Provide the immutable
+40-character lowercase `release_sha`, not `main`, `latest`, a shortened SHA
+or the `chaptera-site` SHA.
+
+The workflow refuses an absent published `cloud-reader-<sha>` release and a
+different `/opt/chaptera/current` symlink **before uploading anything**. It then
+uses trusted public TLS at `https://reader.chaptera.online`, denies Product and
+OIDC routes, and executes **two separate clean Chromium sessions** with the
+public pinned Apache POI `SampleNewsletter.pub`:
+
+- real guest upload → pointer MoveNode → exact revised Scene → download edited
+  IDML (ZIP/XML NodeId and bounds) or PDF (independent painted rectangle and xref);
+- reload the revised document, confirm unchanged original and non-renewing reads;
+- explicitly click Delete, require HTTP 204 and verify the old bearer is revoked.
+
+Only the **source-free** SHA/geometry/privacy summary is uploaded as an Actions
+artifact; original/downloaded PUB/IDML/PDF bytes and guest access tokens are
+never published. The script attempts private DELETE on failure; server TTL
+remains the backstop. The job does **not** install software, change Nginx,
+run an infrastructure rollback, simulate elapsed 60-minute TTL cleanup or
+declare product `GO`. A final operator release decision also needs physical
+TTL/sweep and rollback receipts. Changes in the upstream physical acceptance
+script fail closed until this adapter is reviewed.
