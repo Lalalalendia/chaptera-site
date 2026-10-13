@@ -451,7 +451,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for target in idml pdf; do
+          for target in pdf idml; do
             node tools/run_temporary_editor_real_pub_browser.mjs \
               --public-origin --origin "${PUBLIC_ORIGIN}" \
               --fixture "${RUNNER_TEMP}/public-v0/fixture.pub" \
