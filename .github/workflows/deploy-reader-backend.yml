@@ -147,12 +147,29 @@ jobs:
             "${USER}@${HOST}" 'readlink -f /opt/chaptera/current 2>/dev/null || true')"
           expected="/opt/chaptera/releases/${SHA}"
           echo "installed_path=${actual}" >> "${GITHUB_OUTPUT}"
+          prior_previous="$(ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "${USER}@${HOST}" 'readlink -f /opt/chaptera/previous 2>/dev/null || true')"
+          echo "previous_path=${prior_previous}" >> "${GITHUB_OUTPUT}"
           if [[ "${GITHUB_EVENT_NAME}" != "workflow_dispatch" && "${actual}" == "${expected}" ]]; then
             echo "already_current=true" >> "${GITHUB_OUTPUT}"
             echo "Automatic deploy no-op: ${SHA} is already installed"
           else
             echo "already_current=false" >> "${GITHUB_OUTPUT}"
           fi
+
+      - name: Verify rollback-aware installer before host change
+        if: steps.current.outputs.already_current != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          packet_installer=".reader-release/unpacked/install-reader-host.sh"
+          test -s "${packet_installer}"
+          bash -n "${packet_installer}"
+          # Old release packets must not silently remove the rollback pointer
+          # when the operator explicitly selects an earlier SHA.
+          grep -Fq 'PREVIOUS="/opt/chaptera/previous"' "${packet_installer}"
+          grep -Fq 'ln -sfn "${old_release}" "${PREVIOUS}"' "${packet_installer}"
+          grep -Fq 'ln -sfn "${RELEASE}" "${CURRENT}"' "${packet_installer}"
+          echo "Selected packet has rollback-aware immutable installer"
 
       - name: Capture host preflight
         if: steps.current.outputs.already_current != 'true'
@@ -246,6 +263,58 @@ jobs:
           set -euo pipefail
           archive="/home/${USER}/chaptera-reader-incoming/${SHA}/chaptera-cloud-reader-linux-amd64.tar.gz"
           ssh "${USER}@${HOST}"             "sudo -n /usr/local/sbin/chaptera-reader-deploy '${SHA}' '${archive}'"
+
+      - name: Verify host rollback provenance after install
+        if: steps.current.outputs.already_current != 'true'
+        env:
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          USER: ${{ secrets.DEPLOY_USER }}
+          SHA: ${{ steps.release.outputs.sha }}
+          OLD_RELEASE: ${{ steps.current.outputs.installed_path }}
+          PREVIOUS_BEFORE: ${{ steps.current.outputs.previous_path }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "${SHA}" =~ ^[0-9a-f]{40}$ ]]
+          expected="/opt/chaptera/releases/${SHA}"
+          read_host_link() {
+            ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "${USER}@${HOST}" "readlink -f /opt/chaptera/${1} 2>/dev/null || true"
+          }
+          actual="$(read_host_link current)"
+          previous="$(read_host_link previous)"
+          [[ "${actual}" == "${expected}" ]] || {
+            echo "::error::Host current release does not match the installed immutable SHA"
+            exit 1
+          }
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "${USER}@${HOST}" "test -x '${expected}/chaptera'"
+
+          if [[ -n "${OLD_RELEASE}" ]]; then
+            [[ "${OLD_RELEASE}" =~ ^/opt/chaptera/releases/[0-9a-f]{40}$ ]] || {
+              echo "::error::Original current pointer was not an immutable release"
+              exit 1
+            }
+            if [[ "${OLD_RELEASE}" != "${expected}" ]]; then
+              [[ "${previous}" == "${OLD_RELEASE}" ]] || {
+                echo "::error::Host previous pointer does not preserve the last installed SHA"
+                exit 1
+              }
+              ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "${USER}@${HOST}" "test -x '${previous}/chaptera'"
+              echo "Host release pointers verified: current=${SHA}, previous=${OLD_RELEASE##*/}"
+            else
+              [[ "${previous}" == "${PREVIOUS_BEFORE}" ]] || {
+                echo "::error::Idempotent reinstall changed the previous release pointer"
+                exit 1
+              }
+              echo "Host current SHA verified; same-release reinstall preserved previous pointer"
+            fi
+          else
+            [[ "${previous}" == "${PREVIOUS_BEFORE}" ]] || {
+              echo "::error::Fresh install changed prior rollback pointer without a predecessor"
+              exit 1
+            }
+            echo "Host current SHA verified; fresh install had no predecessor"
+          fi
+          # This is a read-only host provenance witness, not a rollback drill.
 
       - name: Real PUB physical acceptance
         if: steps.current.outputs.already_current != 'true'
