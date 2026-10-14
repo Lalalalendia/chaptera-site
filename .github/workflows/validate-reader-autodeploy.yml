@@ -51,6 +51,13 @@ jobs:
           grep -Fq 'Host previous pointer does not preserve the last installed SHA' "$workflow"
           grep -Fq 'Idempotent reinstall changed the previous release pointer' "$workflow"
           grep -Fq 'Fresh install changed prior rollback pointer' "$workflow"
+          # A UI-only release must not silently serve old HTML/CSS.
+          grep -Fq 'Verify publicly served Guest UI and scripts match deployed rar2 commit' "$workflow"
+          grep -Fq 'temporary-editor-preview.html' "$workflow"
+          grep -Fq 'temporary-editor-preview.css' "$workflow"
+          grep -Fq 'public_path="/editor/temporary-preview"' "$workflow"
+          grep -Fq 'https://reader.chaptera.online${public_path}' "$workflow"
+          grep -Fq 'cmp --silent "${work}/expected" "${work}/actual"' "$workflow"
           grep -Fq 'environment: production' "$workflow"
           ! grep -Fq 'workflow_run:' "$workflow"
           grep -Fq 'outputs:' "$workflow"
