@@ -539,7 +539,7 @@ jobs:
     needs: deploy
     if: needs.deploy.result == 'success' && (needs.deploy.outputs.already_current != 'true' || github.event_name == 'push')
     runs-on: ubuntu-24.04
-    timeout-minutes: 40
+    timeout-minutes: 55
     env:
       RELEASE_SHA: ${{ needs.deploy.outputs.release_sha }}
       PUBLIC_ORIGIN: https://reader.chaptera.online
@@ -685,6 +685,31 @@ jobs:
           }
           JS
 
+      - name: Admit public CreateTextBox only for a release containing the protected feature commit
+        id: textbox_admission
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The current installed packet is authoritative. Never use latest-main
+          # browser assets to infer that an older production binary has the feature.
+          textbox_introduced=f51590fa2feeb78ddc9987fa74cfa72177c96e5f
+          relation="$(curl -fsSL --retry 4 --retry-delay 2 \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            "https://api.github.com/repos/Lalalalendia/rar2/compare/${textbox_introduced}...${RELEASE_SHA}")"
+          if printf "%s\n" "${relation}" | jq -e '.behind_by == 0 and (.status == "ahead" or .status == "identical")' > /dev/null; then
+            echo "admitted=true" >> "${GITHUB_OUTPUT}"
+            echo "Deployed immutable Reader SHA includes protected CreateTextBox"
+          elif printf "%s\n" "${relation}" | jq -e '.status == "behind" and .ahead_by == 0 and .behind_by > 0' > /dev/null; then
+            echo "admitted=false" >> "${GITHUB_OUTPUT}"
+            echo "This older deployed Reader release does not include CreateTextBox; test not applicable"
+          else
+            echo "::error::Deployed Reader SHA diverges from protected CreateTextBox history"
+            exit 1
+          fi
+
       - name: Real public Chromium MoveNode with IDML and PDF consumers
         id: browser
         working-directory: rar2-harness
@@ -710,11 +735,103 @@ jobs:
               --out "${RUNNER_TEMP}/public-v0/${target}.json"
           done
 
+      - uses: actions/setup-python@v5
+        if: steps.textbox_admission.outputs.admitted == 'true'
+        with:
+          python-version: "3.11"
+
+      - name: Install independent public TextBox PDF/IDML/ODG consumers
+        if: steps.textbox_admission.outputs.admitted == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends scribus libreoffice-draw xvfb
+          python3 -m pip install --disable-pip-version-check --no-input --no-cache-dir "PyMuPDF==1.26.7"
+          python3 -m unittest discover -v -s tools -p test_verify_temporary_guest_story_pdf_export.py
+
+      - name: Prove public Chromium CreateTextBox and authored Story in IDML ODG PDF
+        id: textbox_browser
+        if: steps.textbox_admission.outputs.admitted == 'true'
+        working-directory: rar2-harness
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq -- '--public-origin' tools/run_temporary_editor_real_pub_textbox_browser.mjs
+          # Both consumers start new anonymous uploads from this runner/IP.
+          # Respect the public Guest ingress rate window; never relax server limits.
+          sleep 65
+          first_session=true
+          for target in idml odg; do
+            if [[ "${first_session}" != true ]]; then
+              sleep 65
+            fi
+            first_session=false
+            node tools/run_temporary_editor_real_pub_textbox_browser.mjs \
+              --public-origin --origin "${PUBLIC_ORIGIN}" \
+              --fixture "${RUNNER_TEMP}/public-v0/fixture.pub" \
+              --fixture-sha256 "${FIXTURE_SHA256}" \
+              --target "${target}" \
+              --out "${RUNNER_TEMP}/public-v0/textbox-${target}.json"
+          done
+
+      - name: Require independent public CreateTextBox exported Story receipts
+        if: steps.textbox_admission.outputs.admitted == 'true'
+        env:
+          HARNESS_SHA: ${{ steps.harness.outputs.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          root = Path(os.environ["RUNNER_TEMP"]) / "public-v0"
+          for target in ("idml", "odg"):
+              receipt = json.loads((root / f"textbox-{target}.json").read_text())
+              assert receipt["schema"] == "chaptera.tempedit-real-pub-create-textbox-chromium-https.v1"
+              assert receipt["status"] == "PASS"
+              assert receipt["deployment_mode"] == "public_trusted_origin"
+              assert receipt["public_trusted_tls"] is True
+              assert receipt["local_tls_caddy"] is False
+              assert receipt["source_sha256"] == os.environ["FIXTURE_SHA256"]
+              assert receipt["export_target"] == target
+              assert receipt["browser_pointer_create_commits"] == 1
+              assert receipt["browser_story_commits"] == 1
+              for key in ("exact_current_reopened", "created_story_exact_reopened",
+                          "physical_target_xml_consumer",
+                          "physical_new_story_pdf_text_consumer",
+                          "target_application_reopened",
+                          "original_pub_immutable",
+                          "read_replay_export_no_ttl_extension",
+                          "private_bearer_not_in_urls",
+                          "same_browser_delete_and_revoke",
+                          "loss_report_checked"):
+                  assert receipt[key] is True, (target, key)
+              assert len(receipt["changed_artifact_sha256"]) == 64
+              assert len(receipt["changed_pdf_sha256"]) == 64
+              assert receipt["v0_go"] is False
+          summary = {
+              "schema": "chaptera.public-textbox-story-export-acceptance.v1",
+              "status": "PASS",
+              "release_sha": os.environ["RELEASE_SHA"],
+              "harness_sha": os.environ["HARNESS_SHA"],
+              "targets": ["idml", "odg", "pdf"],
+              "trusted_public_https": True,
+              "authored_story_independent_consumers": True,
+              "same_session_revoke": True,
+              "v0_go": False,
+          }
+          (root / "source-free-textbox-summary.json").write_text(
+              json.dumps(summary, indent=2, sort_keys=True) + "\n")
+          PY
+
       - name: Record source-neutral acceptance identity
         if: always()
         env:
           HARNESS_SHA: ${{ steps.harness.outputs.sha }}
           BROWSER_OUTCOME: ${{ steps.browser.outcome }}
+          TEXTBOX_ADMITTED: ${{ steps.textbox_admission.outputs.admitted }}
+          TEXTBOX_OUTCOME: ${{ steps.textbox_browser.outcome }}
         shell: bash
         run: |
           set -euo pipefail
@@ -730,6 +847,8 @@ jobs:
               "release_sha": os.environ["RELEASE_SHA"],
               "harness_sha": os.environ["HARNESS_SHA"],
               "browser_outcome": os.environ["BROWSER_OUTCOME"],
+              "textbox_admitted": os.environ["TEXTBOX_ADMITTED"] == "true",
+              "textbox_outcome": os.environ["TEXTBOX_OUTCOME"],
           }
           (root / "source-free-context.json").write_text(
               json.dumps(context, indent=2, sort_keys=True) + "\n")
@@ -738,6 +857,7 @@ jobs:
       - name: Require public edit export reload and DELETE receipts
         env:
           HARNESS_SHA: ${{ steps.harness.outputs.sha }}
+          TEXTBOX_ADMITTED: ${{ steps.textbox_admission.outputs.admitted }}
         shell: bash
         run: |
           set -euo pipefail
@@ -767,6 +887,8 @@ jobs:
               'release_sha': os.environ['RELEASE_SHA'],
               'harness_sha': os.environ['HARNESS_SHA'],
               'targets': ['idml', 'pdf'],
+              'textbox_public_admitted': os.environ["TEXTBOX_ADMITTED"] == "true",
+              'textbox_targets': ["idml", "odg", "pdf"] if os.environ["TEXTBOX_ADMITTED"] == "true" else [],
               'trusted_public_https': True,
               'edit_reload_delete': True,
               'v0_go': False,
@@ -783,6 +905,7 @@ jobs:
           path: |
             ${{ runner.temp }}/public-v0/source-free-context.json
             ${{ runner.temp }}/public-v0/source-free-summary.json
+            ${{ runner.temp }}/public-v0/source-free-textbox-summary.json
           if-no-files-found: error
           retention-days: 14
 
