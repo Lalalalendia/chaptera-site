@@ -45,6 +45,8 @@ jobs:
           grep -Fq '"${RELEASE_MODE}" == "published"' "$workflow"
           grep -Fq '"${tag}" == "${newest_tag}"' "$workflow"
           grep -Fq 'Stale or unrecognized published release event' "$workflow"
+          grep -Fq 'Automated actors cannot use operator rollback/reinstall mode' "$workflow"
+          grep -Fq 'GITHUB_ACTOR' "$workflow"
           grep -Fq 'auto_deploy=true' "$workflow"
           grep -Fq 'compare/${SHA}...${installed_sha}' "$workflow"
           grep -Fq '.status == "behind" and .ahead_by == 0 and .behind_by > 0' "$workflow"
@@ -113,6 +115,8 @@ jobs:
             ] | max_by(.published_at) | .tag_name')"
           test "$newest_tag" = "cloud-reader-$new"
           test "cloud-reader-$old" != "$newest_tag"
+          [[ "chaptera-release[bot]" == *"[bot]" ]]
+          [[ "human-operator" != *"[bot]" ]]
           # Candidate newer than installed is a valid automatic promotion;
           # same, older and diverged are NOT.
           for status in ahead identical diverged; do

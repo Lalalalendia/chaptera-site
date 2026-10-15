@@ -84,3 +84,8 @@ The cron `*/10` fallback and rollback-aware deploy bridge stay unchanged.
 Measure release `published_at` → host `current` identity → public acceptance
 against the first real release after the app is provisioned; do not extrapolate
 release latency from unit tests.
+
+For rollback isolation, the site receiver explicitly denies `release_mode=manual`
+when `GITHUB_ACTOR` identifies a bot. Thus the delegated GitHub App token
+cannot turn its automatic published-event authority into an intentional
+operator rollback, even though both modes share GitHub's Actions endpoint.

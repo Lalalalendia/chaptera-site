@@ -57,6 +57,12 @@ jobs:
               echo "::error::Unrecognized release delivery mode"
               exit 1
             }
+            if [[ "${RELEASE_MODE}" == "manual" && "${GITHUB_ACTOR}" == *"[bot]" ]]; then
+              # The cross-repo GitHub App has Actions:write only, but a
+              # delegated event credential must not gain manual rollback.
+              echo "::error::Automated actors cannot use operator rollback/reinstall mode"
+              exit 1
+            fi
             sha="${PINNED_RELEASE_SHA}"
             [[ "${sha}" =~ ^[0-9a-f]{40}$ ]] || {
               echo "::error::Production release_sha must be an exact 40-hex rar2 commit SHA"
