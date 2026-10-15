@@ -438,6 +438,18 @@ jobs:
           # Source-neutral receipts only: publish SHA and public asset names,
           # never private PUB contents, guest tokens or session IDs.
           echo "Public Guest HTML/CSS/JS assets match release ${RELEASE_SHA}"
+          # The Reader landing page must be the exact immutable source asset,
+          # not just any HTTP 200 carrying the Chaptera brand. This verifies
+          # the separate Editor entry on the actual production Reader host.
+          curl --fail --location --silent --show-error --retry 3             "https://raw.githubusercontent.com/Lalalalendia/rar2/${RELEASE_SHA}/apps/cloud-reader/index.html"             --output "${work}/reader-expected.html"
+          curl --fail --silent --show-error --max-time 20             -H 'Cache-Control: no-cache' -H 'Pragma: no-cache'             "https://reader.chaptera.online/"             --output "${work}/reader-actual.html"
+          cmp --silent "${work}/reader-expected.html" "${work}/reader-actual.html" || {
+            echo "::error::Public Reader index differs from immutable rar2 release_sha"
+            exit 1
+          }
+          grep -Fq 'id="temporary-editor-link"' "${work}/reader-actual.html"
+          grep -Fq 'href="https://reader.chaptera.online/editor/temporary-preview"' "${work}/reader-actual.html"
+          echo "Public Reader root HTML matches immutable release ${RELEASE_SHA}; Editor entry is present"
           # Full public browser upload/edit/IDML+PDF/delete stays a separate
           # operator acceptance gate; no production GO inferred here.
 
@@ -521,6 +533,85 @@ jobs:
           set -euo pipefail
           npm install --no-save playwright@1.55.0
           npx playwright install --with-deps chromium
+
+      - name: Prove public Reader to separate Editor navigation in Chromium
+        working-directory: rar2-harness
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'JS'
+          import assert from "node:assert/strict";
+          import { chromium } from "playwright";
+
+          const root = "https://reader.chaptera.online";
+          const editorUrl = root + "/editor/temporary-preview";
+          const browser = await chromium.launch({headless: true});
+          try {
+            const context = await browser.newContext({
+              viewport: {width: 1280, height: 900},
+              acceptDownloads: false
+            });
+            for (const origin of [root + "/", "https://chaptera.online/cloud-reader/"]) {
+              const page = await context.newPage();
+              const mutations = [];
+              page.on("request", request => {
+                if (["POST", "PUT", "PATCH", "DELETE"].includes(request.method())) {
+                  mutations.push({method: request.method(), path: new URL(request.url()).pathname});
+                }
+              });
+              const response = await page.goto(origin, {
+                waitUntil: "domcontentloaded", timeout: 30000
+              });
+              assert.equal(response?.status(), 200, "Reader page is not public HTTP 200");
+              const link = page.locator("#temporary-editor-link");
+              await link.waitFor({state: "visible", timeout: 15000});
+              assert.equal(await link.getAttribute("href"), editorUrl);
+              assert.equal(await link.getAttribute("target"), "_blank");
+              assert.equal(await link.getAttribute("referrerpolicy"), "no-referrer");
+              const rel = (await link.getAttribute("rel"))?.split(/\s+/) ?? [];
+              assert.ok(rel.includes("noopener") && rel.includes("noreferrer"));
+              assert.match(await link.getAttribute("aria-label") ?? "", /choose the PUB again/);
+              for (const [width, height] of [[1280, 900], [390, 844], [320, 568]]) {
+                await page.setViewportSize({width, height});
+                const box = await link.boundingBox();
+                assert.ok(box && box.width >= 60 && box.x >= -1 &&
+                  box.x + box.width <= width + 1 && box.y >= -1 &&
+                  box.y + box.height <= height + 1, "Edit PUB is clipped at " + width);
+                assert.equal(await page.evaluate(() =>
+                  document.documentElement.scrollWidth <= innerWidth + 1),
+                  true, "Reader caused horizontal overflow at " + width);
+              }
+              if (origin === root + "/") {
+                await page.setViewportSize({width: 1280, height: 900});
+                const popupPromise = page.waitForEvent("popup", {timeout: 30000});
+                await link.click();
+                const editor = await popupPromise;
+                await editor.waitForLoadState("domcontentloaded", {timeout: 30000});
+                const url = new URL(editor.url());
+                assert.equal(url.origin, root);
+                assert.equal(url.pathname, "/editor/temporary-preview");
+                assert.equal(url.search, "", "Reader must not transfer query data");
+                assert.equal(url.hash, "", "Reader must not transfer URL fragments");
+                await editor.locator("#temporary-file").waitFor({
+                  state: "attached", timeout: 15000
+                });
+                assert.equal(await editor.locator("#temporary-file").inputValue(), "",
+                  "Editor must require a separate user upload");
+                assert.equal(await editor.locator("#temporary-start").count(), 1);
+                await editor.close();
+              }
+              assert.deepEqual(mutations, [], "Reader navigation must not mutate a Guest session");
+              await page.close();
+            }
+            console.log(JSON.stringify({
+              schema: "chaptera.reader-editor-public-navigation.v1",
+              status: "PASS", origins: 2, viewports: [1280,390,320],
+              separate_tab: true, separate_upload: true, bearer_transfer: false
+            }));
+          } finally {
+            await browser.close();
+          }
+          JS
 
       - name: Real public Chromium MoveNode with IDML and PDF consumers
         id: browser
