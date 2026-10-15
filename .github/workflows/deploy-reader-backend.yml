@@ -742,6 +742,7 @@ jobs:
 
       - name: Install independent public TextBox PDF/IDML/ODG consumers
         if: steps.textbox_admission.outputs.admitted == 'true'
+        working-directory: rar2-harness
         shell: bash
         run: |
           set -euo pipefail
