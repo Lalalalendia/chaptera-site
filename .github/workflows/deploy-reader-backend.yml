@@ -48,6 +48,7 @@ jobs:
         env:
           PINNED_RELEASE_SHA: ${{ inputs.release_sha }}
           RELEASE_MODE: ${{ inputs.release_mode || 'manual' }}
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
@@ -73,7 +74,7 @@ jobs:
               # App event is NOT a rollback capability. Compare its requested
               # SHA against the newest eligible public immutable release.
               releases="$(curl -fsSL --retry 4 --retry-delay 2 \
-                -H 'Accept: application/vnd.github+json' \
+                -H 'Accept: application/vnd.github+json' -H "Authorization: Bearer ${GH_TOKEN}" \
                 'https://api.github.com/repos/Lalalalendia/rar2/releases?per_page=30')"
               newest_tag="$(printf '%s\n' "${releases}" | jq -er '
                 [.[] |
@@ -91,7 +92,7 @@ jobs:
             # GitHub Releases API list order is not a deployment authority.
             # Select the newest eligible immutable packet by published_at.
             releases="$(curl -fsSL --retry 4 --retry-delay 2 \
-              -H 'Accept: application/vnd.github+json' \
+              -H 'Accept: application/vnd.github+json' -H "Authorization: Bearer ${GH_TOKEN}" \
               'https://api.github.com/repos/Lalalalendia/rar2/releases?per_page=30')"
             tag="$(printf '%s\n' "${releases}" | jq -er '
               [.[] |
@@ -107,7 +108,7 @@ jobs:
 
           release_url="https://api.github.com/repos/Lalalalendia/rar2/releases/tags/${tag}"
           release_json="$(curl -fsSL --retry 4 --retry-delay 2 \
-            -H 'Accept: application/vnd.github+json' "${release_url}")"
+            -H 'Accept: application/vnd.github+json' -H "Authorization: Bearer ${GH_TOKEN}" "${release_url}")"
           printf '%s\n' "${release_json}" | jq -e --arg tag "${tag}" --arg sha "${sha}" '
             .tag_name == $tag and .draft == false and
             .target_commitish == $sha and
@@ -119,7 +120,7 @@ jobs:
           # is still an ancestor of protected rar2/main. This blocks releases
           # from abandoned/foreign histories.
           compare_json="$(curl -fsSL --retry 4 --retry-delay 2 \
-            -H 'Accept: application/vnd.github+json' \
+            -H 'Accept: application/vnd.github+json' -H "Authorization: Bearer ${GH_TOKEN}" \
             "https://api.github.com/repos/Lalalalendia/rar2/compare/${sha}...main")"
           printf '%s\n' "${compare_json}" | jq -e '
             .behind_by == 0 and (.status == "ahead" or .status == "identical")
@@ -176,6 +177,7 @@ jobs:
           USER: ${{ secrets.DEPLOY_USER }}
           SHA: ${{ steps.release.outputs.sha }}
           RELEASE_MODE: ${{ inputs.release_mode || 'manual' }}
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
@@ -200,7 +202,7 @@ jobs:
             }
             installed_sha="${actual##*/}"
             relation="$(curl -fsSL --retry 4 --retry-delay 2 \
-              -H 'Accept: application/vnd.github+json' \
+              -H 'Accept: application/vnd.github+json' -H "Authorization: Bearer ${GH_TOKEN}" \
               "https://api.github.com/repos/Lalalalendia/rar2/compare/${SHA}...${installed_sha}")"
             printf '%s\n' "${relation}" | jq -e '
               .status == "behind" and .ahead_by == 0 and .behind_by > 0
@@ -545,17 +547,19 @@ jobs:
     steps:
       - name: Resolve protected rar2 acceptance harness
         id: harness
+        env:
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
           [[ "${RELEASE_SHA}" =~ ^[0-9a-f]{40}$ ]]
           harness_sha="$(curl -fsSL --retry 4 --retry-delay 2 \
-            -H 'Accept: application/vnd.github+json' \
+            -H 'Accept: application/vnd.github+json' -H "Authorization: Bearer ${GH_TOKEN}" \
             https://api.github.com/repos/Lalalalendia/rar2/commits/main | jq -er .sha)"
           [[ "${harness_sha}" =~ ^[0-9a-f]{40}$ ]]
           echo "sha=${harness_sha}" >> "${GITHUB_OUTPUT}"
           release_json="$(curl -fsSL --retry 4 --retry-delay 2 \
-            -H 'Accept: application/vnd.github+json' \
+            -H 'Accept: application/vnd.github+json' -H "Authorization: Bearer ${GH_TOKEN}" \
             "https://api.github.com/repos/Lalalalendia/rar2/releases/tags/cloud-reader-${RELEASE_SHA}")"
           printf '%s\n' "${release_json}" | jq -e --arg sha "${RELEASE_SHA}" '
             .draft == false and .target_commitish == $sha and
