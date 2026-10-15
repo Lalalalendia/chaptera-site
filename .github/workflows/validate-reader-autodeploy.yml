@@ -40,6 +40,8 @@ jobs:
           grep -Fq 'options:' "$workflow"
           grep -Fq -- '- published' "$workflow"
           # Avoid GitHub Actions interpolation inside this guard's own run: block.
+          grep -Fq 'GH_TOKEN:' "$workflow"
+          grep -Fq 'Authorization: Bearer' "$workflow"
           grep -Fq 'RELEASE_MODE:' "$workflow"
           grep -Fq 'inputs.release_mode' "$workflow"
           grep -Fq '"${RELEASE_MODE}" == "published"' "$workflow"
@@ -145,10 +147,12 @@ jobs:
           python3 -m py_compile "$script"
 
       - name: Resolve current public immutable packet without deploying
+        env:
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
-          releases="$(curl -fsSL --retry 4 --retry-delay 2             -H 'Accept: application/vnd.github+json'             'https://api.github.com/repos/Lalalalendia/rar2/releases?per_page=30')"
+          releases="$(curl -fsSL --retry 4 --retry-delay 2             -H 'Accept: application/vnd.github+json' -H "Authorization: Bearer ${GH_TOKEN}"             'https://api.github.com/repos/Lalalalendia/rar2/releases?per_page=30')"
           tag="$(printf '%s\n' "$releases" | jq -er '
             [.[] |
               select(.draft == false and .published_at != null) |
@@ -158,7 +162,7 @@ jobs:
           sha="${tag#cloud-reader-}"
           [[ "$sha" =~ ^[0-9a-f]{40}$ ]]
 
-          exact="$(curl -fsSL --retry 4 --retry-delay 2             -H 'Accept: application/vnd.github+json'             "https://api.github.com/repos/Lalalalendia/rar2/releases/tags/$tag")"
+          exact="$(curl -fsSL --retry 4 --retry-delay 2             -H 'Accept: application/vnd.github+json' -H "Authorization: Bearer ${GH_TOKEN}"             "https://api.github.com/repos/Lalalalendia/rar2/releases/tags/$tag")"
           printf '%s\n' "$exact" | jq -e --arg tag "$tag" --arg sha "$sha" '
             .tag_name == $tag and .draft == false and
             .target_commitish == $sha and
@@ -166,7 +170,7 @@ jobs:
               (.digest | strings | startswith("sha256:"))))
           ' >/dev/null
 
-          compare="$(curl -fsSL --retry 4 --retry-delay 2             -H 'Accept: application/vnd.github+json'             "https://api.github.com/repos/Lalalalendia/rar2/compare/$sha...main")"
+          compare="$(curl -fsSL --retry 4 --retry-delay 2             -H 'Accept: application/vnd.github+json' -H "Authorization: Bearer ${GH_TOKEN}"             "https://api.github.com/repos/Lalalalendia/rar2/compare/$sha...main")"
           printf '%s\n' "$compare" | jq -e '
             .behind_by == 0 and (.status == "ahead" or .status == "identical")
           ' >/dev/null
