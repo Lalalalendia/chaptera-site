@@ -6,7 +6,6 @@ on:
     paths:
       - ".github/workflows/reader-production-ttl-acceptance.yml"
       - "cloud-reader/acceptance/production_temporary_ttl.py"
-      - ".github/workflows/validate-reader-autodeploy.yml"
   schedule:
     - cron: "17 3 * * *"
   workflow_dispatch:
