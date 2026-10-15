@@ -89,6 +89,11 @@ jobs:
           node --check "$root/render-v1.mjs"
           grep -q '/v1/reader/guest-sessions' "$root/reader-app.mjs"
           grep -q 'rel="icon" type="image/svg+xml" href="./favicon.svg"' "$root/index.html"
+          # Keep the quiet cross-product entry bound to the real canonical
+          # anonymous Editor; never forward source filename or Guest token.
+          grep -Fq 'id="temporary-editor-link"' "$root/index.html"
+          grep -Fq 'href="https://reader.chaptera.online/editor/temporary-preview"' "$root/index.html"
+          grep -Fq 'target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer"' "$root/index.html"
           grep -q 'property="og:url" content="https://reader.chaptera.online/"' "$root/index.html"
           grep -q 'property="og:image" content="https://chaptera.online/social-preview.png"' "$root/index.html"
           grep -q 'name="twitter:card" content="summary_large_image"' "$root/index.html"

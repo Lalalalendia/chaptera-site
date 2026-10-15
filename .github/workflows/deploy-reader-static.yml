@@ -36,6 +36,11 @@ jobs:
           node --check "$root/render-v1.mjs"
           grep -q '/v1/reader/guest-sessions' "$root/reader-app.mjs"
           grep -q 'rel="icon" type="image/svg+xml" href="./favicon.svg"' "$root/index.html"
+          # Keep the quiet cross-product entry bound to the real canonical
+          # anonymous Editor; never forward source filename or Guest token.
+          grep -Fq 'id="temporary-editor-link"' "$root/index.html"
+          grep -Fq 'href="https://reader.chaptera.online/editor/temporary-preview"' "$root/index.html"
+          grep -Fq 'target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer"' "$root/index.html"
           cmp site/favicon.svg "$root/favicon.svg"
 
       - name: Configure SSH
@@ -63,4 +68,8 @@ jobs:
       - name: Static smoke
         run: |
           set -euo pipefail
-          curl -fsS https://chaptera.online/cloud-reader/ | grep -q 'Chaptera'
+          # Validate the currently served mirror, not only the deploy workspace.
+          body="$(curl -fsS --max-time 30 https://chaptera.online/cloud-reader/)"
+          grep -Fq 'Chaptera' <<< "$body"
+          grep -Fq 'id="temporary-editor-link"' <<< "$body"
+          grep -Fq 'href="https://reader.chaptera.online/editor/temporary-preview"' <<< "$body"
