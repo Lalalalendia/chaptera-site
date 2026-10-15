@@ -134,6 +134,22 @@ jobs:
           set -euo pipefail
           ttl=".github/workflows/reader-production-ttl-acceptance.yml"
           script="cloud-reader/acceptance/production_temporary_ttl.py"
+          # Only TTL witness semantics/config changes get the 60-minute
+          # production run. Deploy-policy changes get this cheap guard instead.
+          ttl_push_paths="$(awk '
+            /^  push:$/ { in_push = 1; next }
+            in_push && /^  [a-z_]+:/ { exit }
+            in_push && /^      - / { print }
+          ' "$ttl")"
+          expected_paths="$(printf '%s\n' \
+            '      - ".github/workflows/reader-production-ttl-acceptance.yml"' \
+            '      - "cloud-reader/acceptance/production_temporary_ttl.py"')"
+          if [[ "$ttl_push_paths" != "$expected_paths" ]]; then
+            echo "::error::Production one-hour TTL push paths must be exactly workflow plus TTL witness script"
+            exit 1
+          fi
+          grep -Fq '  schedule:' "$ttl"
+          grep -Fq '  workflow_dispatch:' "$ttl"
           grep -Fq 'cron: "17 3 * * *"' "$ttl"
           grep -Fq 'timeout-minutes: 75' "$ttl"
           grep -Fq 'max_by(.published_at)' "$ttl"
