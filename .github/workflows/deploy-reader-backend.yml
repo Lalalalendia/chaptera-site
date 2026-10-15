@@ -583,10 +583,18 @@ jobs:
               }
               if (origin === root + "/") {
                 await page.setViewportSize({width: 1280, height: 900});
-                const popupPromise = page.waitForEvent("popup", {timeout: 30000});
+                // rel=noopener intentionally creates a detached top-level
+                // browsing context. Context-level "page" events remain valid
+                // even when no opener/popup relationship exists.
+                const newTabPromise = context.waitForEvent("page", {timeout: 30000});
                 await link.click();
-                const editor = await popupPromise;
+                const editor = await newTabPromise;
+                assert.notEqual(editor, page, "Edit PUB must open a separate tab");
                 await editor.waitForLoadState("domcontentloaded", {timeout: 30000});
+                assert.equal(await editor.evaluate(() => window.opener), null,
+                  "noopener must prevent access to the Reader window");
+                assert.equal(await editor.evaluate(() => document.referrer), "",
+                  "noreferrer must not disclose the Reader page");
                 const url = new URL(editor.url());
                 assert.equal(url.origin, root);
                 assert.equal(url.pathname, "/editor/temporary-preview");
