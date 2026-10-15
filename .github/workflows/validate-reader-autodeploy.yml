@@ -39,7 +39,9 @@ jobs:
           grep -Fq 'release_mode:' "$workflow"
           grep -Fq 'options:' "$workflow"
           grep -Fq -- '- published' "$workflow"
-          grep -Fq 'RELEASE_MODE: ${{ inputs.release_mode || 'manual' }}' "$workflow"
+          # Avoid GitHub Actions interpolation inside this guard's own run: block.
+          grep -Fq 'RELEASE_MODE:' "$workflow"
+          grep -Fq 'inputs.release_mode' "$workflow"
           grep -Fq '"${RELEASE_MODE}" == "published"' "$workflow"
           grep -Fq '"${tag}" == "${newest_tag}"' "$workflow"
           grep -Fq 'Stale or unrecognized published release event' "$workflow"
