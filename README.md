@@ -50,3 +50,37 @@ Deployment layout:
 ├── releases/<git-sha>/
 └── current -> releases/<git-sha>/
 ```
+
+
+## Release-published event-driven Reader backend deployment (opt-in)
+
+Owner task: [CI-READER-RELEASE-EVENT-DEPLOY-01](https://app.notion.com/p/3fa32a84beec81209c73ee130de32eb5).
+
+The protected `rar2` post-release workflow validates a successful Linux packet
+published from `main`, then dispatches the exact 40-hex release SHA to this
+repository's existing `deploy-reader-backend.yml` with
+`release_mode=published`. The `chaptera-site` receiver **does not grant this
+request release authority**: it independently verifies the GitHub Release tag,
+asset digest, protected-main ancestry, and that the requested release remains
+the most recently published eligible immutable packet. It also rejects an
+automatic host downgrade or diverged host history. No direct SSH privileges or
+Reader/PUB data leave this repository; all production deployment still runs in
+the existing `production` environment and retains the previous release pointer,
+real PUB acceptance and independent public Chromium PDF/IDML proof.
+
+Credentials are an explicit administrative prerequisite in **rar2 only**:
+create/install a dedicated GitHub App with **Actions:write** on
+`Lalalalendia/chaptera-site` (avoid broad repo Content writes), and configure
+`CHAPTERA_DEPLOY_APP_CLIENT_ID` as a repository variable and
+`CHAPTERA_DEPLOY_APP_PRIVATE_KEY` as a protected secret. The sender uses a
+short-lived, one-repository installation token; without these settings it
+emits a warning and the **existing cron remains the only automatic fallback**.
+The code/PR alone must not be called an operational event-driven cutover.
+
+An explicit `workflow_dispatch` with `release_mode=manual` (default) and
+`release_sha` remains the **only** path for intentional operator rollback or
+same-SHA reinstall. A `release_mode=published` dispatch is not a rollback.
+The cron `*/10` fallback and rollback-aware deploy bridge stay unchanged.
+Measure release `published_at` → host `current` identity → public acceptance
+against the first real release after the app is provisioned; do not extrapolate
+release latency from unit tests.

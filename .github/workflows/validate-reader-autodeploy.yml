@@ -36,6 +36,17 @@ jobs:
 
           grep -Fq 'cron: "*/10 * * * *"' "$workflow"
           grep -Fq 'workflow_dispatch:' "$workflow"
+          grep -Fq 'release_mode:' "$workflow"
+          grep -Fq 'options:' "$workflow"
+          grep -Fq -- '- published' "$workflow"
+          grep -Fq 'RELEASE_MODE: ${{ inputs.release_mode || 'manual' }}' "$workflow"
+          grep -Fq '"${RELEASE_MODE}" == "published"' "$workflow"
+          grep -Fq '"${tag}" == "${newest_tag}"' "$workflow"
+          grep -Fq 'Stale or unrecognized published release event' "$workflow"
+          grep -Fq 'auto_deploy=true' "$workflow"
+          grep -Fq 'compare/${SHA}...${installed_sha}' "$workflow"
+          grep -Fq '.status == "behind" and .ahead_by == 0 and .behind_by > 0' "$workflow"
+          grep -Fq 'Automatic deploy refuses older, diverged or unknown host transition' "$workflow"
           grep -Fq '.target_commitish == $sha' "$workflow"
           grep -Fq 'compare/${sha}...main' "$workflow"
           grep -Fq '.behind_by == 0' "$workflow"
@@ -76,6 +87,38 @@ jobs:
           grep -Fq 'chaptera.public-auto-deploy-context.v1' "$workflow"
           grep -Fq "'harness_sha': os.environ['HARNESS_SHA']" "$workflow"
           grep -Fq 'source-free-context.json' "$workflow"
+
+      - name: Exercise release ordering and automatic-downgrade guards
+        shell: bash
+        run: |
+          set -euo pipefail
+          old="1111111111111111111111111111111111111111"
+          new="2222222222222222222222222222222222222222"
+          releases="$(jq -n --arg old "$old" --arg new "$new" '
+            [
+              {tag_name:("cloud-reader-" + $old), draft:false,
+               published_at:"2026-10-15T11:40:00Z", assets:[{name:"chaptera-cloud-reader-linux-amd64.tar.gz"}]},
+              {tag_name:("cloud-reader-" + $new), draft:false,
+               published_at:"2026-10-15T11:47:00Z", assets:[{name:"chaptera-cloud-reader-linux-amd64.tar.gz"}]},
+              {tag_name:"not-a-reader", draft:false,
+               published_at:"2026-10-15T12:00:00Z", assets:[{name:"chaptera-cloud-reader-linux-amd64.tar.gz"}]}
+            ]')"
+          newest_tag="$(printf '%s\n' "$releases" | jq -er '
+            [.[] |
+              select(.draft == false and .published_at != null) |
+              select(.tag_name | test("^cloud-reader-[0-9a-f]{40}$")) |
+              select(.assets | any(.name == "chaptera-cloud-reader-linux-amd64.tar.gz"))
+            ] | max_by(.published_at) | .tag_name')"
+          test "$newest_tag" = "cloud-reader-$new"
+          test "cloud-reader-$old" != "$newest_tag"
+          # Candidate newer than installed is a valid automatic promotion;
+          # same, older and diverged are NOT.
+          for status in ahead identical diverged; do
+            ! jq -en --arg status "$status"               '{status:$status, ahead_by:1, behind_by:0} |
+               select(.status == "behind" and .ahead_by == 0 and .behind_by > 0)' >/dev/null
+          done
+          jq -en '{status:"behind", ahead_by:0, behind_by:2} |
+            select(.status == "behind" and .ahead_by == 0 and .behind_by > 0)' >/dev/null
 
       - name: Guard production Temporary Editor TTL witness
         shell: bash

@@ -13,9 +13,17 @@ on:
   workflow_dispatch:
     inputs:
       release_sha:
-        description: "Exact 40-hex rar2 main commit SHA for manual deploy/rollback"
+        description: "Exact 40-hex rar2 main commit SHA for manual deploy/rollback or published release"
         required: true
         type: string
+      release_mode:
+        description: "manual: operator rollback/reinstall; published: GitHub App-triggered automatic deployment"
+        required: true
+        default: manual
+        type: choice
+        options:
+          - manual
+          - published
 
 permissions:
   contents: read
@@ -39,17 +47,40 @@ jobs:
         id: release
         env:
           PINNED_RELEASE_SHA: ${{ inputs.release_sha }}
+          RELEASE_MODE: ${{ inputs.release_mode || 'manual' }}
         shell: bash
         run: |
           set -euo pipefail
 
           if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
+            [[ "${RELEASE_MODE}" == "manual" || "${RELEASE_MODE}" == "published" ]] || {
+              echo "::error::Unrecognized release delivery mode"
+              exit 1
+            }
             sha="${PINNED_RELEASE_SHA}"
             [[ "${sha}" =~ ^[0-9a-f]{40}$ ]] || {
-              echo "::error::Manual production release_sha must be an exact 40-hex rar2 commit SHA"
+              echo "::error::Production release_sha must be an exact 40-hex rar2 commit SHA"
               exit 1
             }
             tag="cloud-reader-${sha}"
+            if [[ "${RELEASE_MODE}" == "published" ]]; then
+              # App event is NOT a rollback capability. Compare its requested
+              # SHA against the newest eligible public immutable release.
+              releases="$(curl -fsSL --retry 4 --retry-delay 2 \
+                -H 'Accept: application/vnd.github+json' \
+                'https://api.github.com/repos/Lalalalendia/rar2/releases?per_page=30')"
+              newest_tag="$(printf '%s\n' "${releases}" | jq -er '
+                [.[] |
+                  select(.draft == false and .published_at != null) |
+                  select(.tag_name | test("^cloud-reader-[0-9a-f]{40}$")) |
+                  select(.assets | any(.name == "chaptera-cloud-reader-linux-amd64.tar.gz"))
+                ] | max_by(.published_at) | .tag_name')"
+              [[ "${tag}" == "${newest_tag}" ]] || {
+                echo "::error::Stale or unrecognized published release event; refusing automatic rollback"
+                exit 1
+              }
+              echo "Validated exact newest published event ${tag}"
+            fi
           else
             # GitHub Releases API list order is not a deployment authority.
             # Select the newest eligible immutable packet by published_at.
@@ -138,6 +169,7 @@ jobs:
           HOST: ${{ secrets.DEPLOY_HOST }}
           USER: ${{ secrets.DEPLOY_USER }}
           SHA: ${{ steps.release.outputs.sha }}
+          RELEASE_MODE: ${{ inputs.release_mode || 'manual' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -149,7 +181,29 @@ jobs:
           echo "installed_path=${actual}" >> "${GITHUB_OUTPUT}"
           prior_previous="$(ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "${USER}@${HOST}" 'readlink -f /opt/chaptera/previous 2>/dev/null || true')"
           echo "previous_path=${prior_previous}" >> "${GITHUB_OUTPUT}"
-          if [[ "${GITHUB_EVENT_NAME}" != "workflow_dispatch" && "${actual}" == "${expected}" ]]; then
+          auto_deploy=false
+          if [[ "${GITHUB_EVENT_NAME}" != "workflow_dispatch" || "${RELEASE_MODE}" == "published" ]]; then
+            auto_deploy=true
+          fi
+          if [[ "${auto_deploy}" == "true" && -n "${actual}" && "${actual}" != "${expected}" ]]; then
+            # Even a delayed or re-ordered release event must not downgrade the
+            # protected host. An operator's explicit manual rollback is separate.
+            [[ "${actual}" =~ ^/opt/chaptera/releases/[0-9a-f]{40}$ ]] || {
+              echo "::error::Automatic deploy refuses unrecognized host release pointer"
+              exit 1
+            }
+            installed_sha="${actual##*/}"
+            relation="$(curl -fsSL --retry 4 --retry-delay 2 \
+              -H 'Accept: application/vnd.github+json' \
+              "https://api.github.com/repos/Lalalalendia/rar2/compare/${SHA}...${installed_sha}")"
+            printf '%s\n' "${relation}" | jq -e '
+              .status == "behind" and .ahead_by == 0 and .behind_by > 0
+            ' >/dev/null || {
+              echo "::error::Automatic deploy refuses older, diverged or unknown host transition"
+              exit 1
+            }
+          fi
+          if [[ "${auto_deploy}" == "true" && "${actual}" == "${expected}" ]]; then
             echo "already_current=true" >> "${GITHUB_OUTPUT}"
             echo "Automatic deploy no-op: ${SHA} is already installed"
           else
