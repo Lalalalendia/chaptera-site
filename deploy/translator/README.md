@@ -21,16 +21,30 @@ the installation scripts under:
 
 `~/chaptera-translator-incoming/218bea25a77e1ae5010dff2840bffc911f152823/`
 
-This action does not install or start the permanent services.
+The stage job also installs the verified wheelhouse into a **temporary** user-owned
+virtual environment on the VPS, then executes `html_v0` and `atoms_v1` mock
+Gemini → worker → SQLite smoke tests. It removes the temporary installation
+afterwards. If less than 280 MiB memory is available, staging fails closed.
+**No Gemini credential, external generateContent request, permanent API or
+systemd mutation is involved.**
 
 ## Step 2 — ONE-TIME root bootstrap
 
-An administrator should inspect the staged unit files and
-`bootstrap-host.sh`, and then run once, as root (replace the account if the
-actual SSH deploy user is different):
+An administrator must first copy the reviewed files into a **root-owned,
+non-writable-by-deploy** directory and execute that independent copy. **Never
+run the bootstrap script as root directly from the deploy user's home**: that
+would allow replacement between review and execution. Example for the
+`chaptera-deploy` SSH account (adjust the home path and account name if
+different):
 
 ```bash
-sudo bash /home/chaptera-deploy/chaptera-translator-incoming/218bea25a77e1ae5010dff2840bffc911f152823/bootstrap-host.sh chaptera-deploy
+STAGED=/home/chaptera-deploy/chaptera-translator-incoming/218bea25a77e1ae5010dff2840bffc911f152823
+sudo install -d -o root -g root -m 0700 /root/chaptera-translator-bootstrap
+sudo install -o root -g root -m 0700 "$STAGED/bootstrap-host.sh" /root/chaptera-translator-bootstrap/
+sudo install -o root -g root -m 0644 "$STAGED/chaptera-translator-api.service" /root/chaptera-translator-bootstrap/
+sudo install -o root -g root -m 0644 "$STAGED/chaptera-translator-worker.service" /root/chaptera-translator-bootstrap/
+# Review the frozen root-owned files before execution.
+sudo bash /root/chaptera-translator-bootstrap/bootstrap-host.sh chaptera-deploy
 ```
 
 The bootstrap creates a locked-down `chaptera-translator` system user,
@@ -38,12 +52,15 @@ root-owned systemd units, isolated `/opt/chaptera-translator` releases,
 persistent `/var/lib/chaptera-translator` SQLite and private
 `/etc/chaptera-translator/credentials/`. It generates a random initial team
 API token without printing it. The deploy user receives sudo rights only for
-start/stop/restart of the two named translator units. Units are **enabled but
-not started** until the release is installed.
+start/stop/restart of the two named translator units. The units are enabled
+but contain `ConditionPathExists` guards: reboot before release installation
+skips them rather than repeatedly starting a missing executable.
 
 The worker has `MemoryHigh=160M` and `MemoryMax=240M`; API has
-`MemoryHigh=112M` and `MemoryMax=160M`. These are protective caps, not
-proof that large chapters fit this VPS.
+`MemoryHigh=112M` and `MemoryMax=160M`. Installation refuses to start the
+permanent processes when available memory is below **320 MiB**. These are
+protective caps and a one-time headroom check, **not** proof that large chapters
+fit this VPS or that the Reader cannot experience memory pressure.
 
 ## Step 3 — activate manually, without paid Gemini calls
 
