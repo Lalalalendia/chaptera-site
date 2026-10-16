@@ -1,0 +1,62 @@
+name: Translator Gemini model access (nonbillable)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/translator-gemini-model-access.yml'
+      - 'deploy/translator/probe-gemini-models.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: chaptera-translator-gemini-model-access
+  cancel-in-progress: false
+
+jobs:
+  models:
+    runs-on: ubuntu-24.04
+    environment: production
+    timeout-minutes: 6
+    env:
+      ARARRA_SHA: b36add155f4eaecb65ebf13df8bcbdc44024a3e4
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Check safe diagnostic syntax and credential precondition
+        env:
+          GEMINI_KEY: ${{ secrets.TRANSLATOR_GEMINI_API_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile deploy/translator/probe-gemini-models.py
+          test -n "$GEMINI_KEY" || { echo 'Missing TRANSLATOR_GEMINI_API_KEY in protected production environment'; exit 2; }
+      - name: Configure pinned SSH host identity
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$SSH_PRIVATE_KEY" && test -n "$SSH_KNOWN_HOSTS"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+      - name: Query Gemini models.list from actual VPS (zero generation requests)
+        env:
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          USER: ${{ secrets.DEPLOY_USER }}
+          GEMINI_KEY: ${{ secrets.TRANSLATOR_GEMINI_API_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$HOST" && test -n "$USER" && test -n "$GEMINI_KEY"
+          scp -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            deploy/translator/probe-gemini-models.py \
+            "$USER@$HOST:chaptera-translator-incoming/$ARARRA_SHA/probe-gemini-models.py"
+          printf '%s\n' "$GEMINI_KEY" | ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            "$USER@$HOST" "python3 'chaptera-translator-incoming/$ARARRA_SHA/probe-gemini-models.py'"
