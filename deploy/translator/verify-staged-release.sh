@@ -25,6 +25,8 @@ work="$(mktemp -d "$slot/staged-smoke.XXXXXXXX")"
 cleanup() {
   rc=$?
   trap - EXIT
+  # The real source is public but should not be retained as a staging side effect.
+  rm -f -- "$slot/fixture-086.txt" "$slot/fixture-086.sha256"
   if [[ "$work" == "$slot"/staged-smoke.* ]]; then
     rm -rf -- "$work"
   fi
@@ -85,4 +87,30 @@ for transport in ("html_v0", "atoms_v1"):
 print("real_gemini_calls=0")
 print("permanent_services_changed=no")
 print("translator_staged_062_acceptance=PASS")
+PY
+
+# Stress the actual chapter from med using a local HTTP mock. It intentionally
+# produces Cyrillic placeholders, NOT a literary translation.
+[[ -s "$slot/fixture-086.txt" && -s "$slot/fixture-086.sha256" && -s "$slot/pilot-chapter-offline.py" ]] || {
+  echo 'error=missing_verified_real_source_fixture' >&2
+  exit 3
+}
+(cd "$slot" && sha256sum -c fixture-086.sha256 --status)
+env -u CHAPTERA_GEMINI_API_KEY -u CREDENTIALS_DIRECTORY \
+  timeout 125s nice -n 10 "$work/venv/bin/python" \
+  "$slot/pilot-chapter-offline.py" "$slot/fixture-086.txt" > "$work/real-chapter-report.json"
+"$work/venv/bin/python" - "$work/real-chapter-report.json" <<'PY'
+import json
+from pathlib import Path
+import sys
+report = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+assert report["schema"] == "chaptera-real-source-offline-v1"
+assert report["mock_response_kind"] == "CYRILLIC_PLACEHOLDERS_NOT_REAL_TRANSLATION"
+assert report["gemini_network_calls"] == 0
+assert report["permanent_service_changes"] == 0
+assert {item["transport"] for item in report["results"]} == {"html_v0", "atoms_v1"}
+for item in report["results"]:
+    assert item["status"] == "PASS"
+    print(f"real_chapter_{item['transport']}_offline=PASS")
+print("real_chapter_offline_probe=PASS")
 PY
