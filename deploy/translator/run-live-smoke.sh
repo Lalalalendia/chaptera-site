@@ -5,8 +5,9 @@ set -euo pipefail
 
 sha="${1:-}"
 protocol="${2:-}"
-if [[ ! "$sha" =~ ^[0-9a-f]{40}$ || ! "$protocol" =~ ^(html_v0|atoms_v1)$ ]]; then
-  echo 'error=invalid_sha_or_transport' >&2
+model="${3:-}"
+if [[ ! "$sha" =~ ^[0-9a-f]{40}$ || ! "$protocol" =~ ^(html_v0|atoms_v1)$ || ! "$model" =~ ^(gemini-3\.8-flash|gemini-3\.6-flash|gemini-3\.5-flash-lite)$ ]]; then
+  echo 'error=invalid_sha_transport_or_model' >&2
   exit 2
 fi
 base="$HOME/chaptera-translator-probe/$sha"
@@ -33,7 +34,7 @@ umask 077
 set +e
 CHAPTERA_GEMINI_API_KEY="$api_key" CHAPTERA_SMOKE_ALLOW_LIVE=YES \
   timeout 100s nice -n 10 "$base/venv/bin/chaptera-smoke" \
-  --live --authorize-billable --max-requests 1 --transport "$protocol" \
+  --live --authorize-billable --max-requests 1 --transport "$protocol" --model "$model" \
   --output "$base/live-$protocol.json"
 status=$?
 set -e
@@ -46,7 +47,7 @@ report = json.load(open(sys.argv[1], encoding='utf-8'))
 assert report['schema'] == 'chaptera-gemini-smoke-v1'
 assert report['mode'] == 'live_gemini'
 assert report['provider_requests'] <= 1
-for key in ('mode', 'transport', 'job_status', 'provider_requests',
+for key in ('mode', 'model', 'transport', 'job_status', 'provider_requests',
             'provider_successful_responses', 'structural_qa_passed',
             'language_probe_passed', 'result_persisted', 'qa_passed', 'failure_category'):
     print(f'{key}={report.get(key)}')
