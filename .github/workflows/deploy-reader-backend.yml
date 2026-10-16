@@ -898,6 +898,93 @@ jobs:
               json.dumps(summary, indent=2, sort_keys=True) + '\n')
           PY
 
+      - name: Project allowlisted public CreateTextBox failure evidence
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The physical harness writes a source-neutral diagnostic on failure.
+          # Do not upload raw per-target receipts, browser logs or API payloads.
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          root = Path(os.environ["RUNNER_TEMP"]) / "public-v0"
+          root.mkdir(parents=True, exist_ok=True)
+          phases = {
+              "ui_open", "pub_ingress", "draw_tool", "pointer_geometry",
+              "pointer_commit", "create_contract", "story_edit", "story_contract",
+              "export", "physical_consumer", "reopen", "revoke", "receipt",
+          }
+          classes = {"assertion", "timeout", "other"}
+          contracts = {
+              "create_ack_missing", "reopened_create_revision_missing",
+              "canonical_operation_missing", "operation_kind_mismatch",
+              "revision_identity_mismatch", "authoring_revision_mismatch",
+              "cursor_mismatch", "ttl_identity_mismatch", "operation_id_mismatch",
+              "operation_page_mismatch", "operation_bounds_mismatch",
+              "operation_font_mismatch", "authored_frame_story_link_missing",
+              "authored_empty_story_missing", "client_validation_or_scene_pending",
+          }
+          counts = (
+              "browser_page_error_count", "current_success_replies",
+              "scene_success_replies", "create_ack_replies", "story_ack_replies",
+              "create_request_count", "story_request_count", "scene_request_count",
+          )
+          statuses = (
+              "create_statuses", "story_statuses", "scene_statuses", "current_statuses",
+          )
+
+          def enum(value, allowlist):
+              return value if isinstance(value, str) and value in allowlist else "unclassified"
+
+          def count(value):
+              return value if type(value) is int and 0 <= value <= 10000 else None
+
+          def http_codes(value):
+              return [code for code in value[:8]
+                      if type(code) is int and 100 <= code <= 599] if isinstance(value, list) else []
+
+          receipts = []
+          for target in ("idml", "odg"):
+              # Fixed names only; no receipt-provided path or user input is read.
+              try:
+                  raw = json.loads((root / ("textbox-" + target + ".json")).read_text())
+              except (OSError, ValueError, UnicodeError):
+                  receipts.append({"target": target, "receipt": "missing_or_unreadable"})
+                  continue
+              if not isinstance(raw, dict):
+                  receipts.append({"target": target, "receipt": "unrecognized"})
+                  continue
+              if (raw.get("schema") == "chaptera.tempedit-real-pub-create-textbox-chromium-https.v1"
+                      and raw.get("status") == "PASS"):
+                  receipts.append({"target": target, "receipt": "pass"})
+                  continue
+              if (raw.get("schema") != "chaptera.tempedit-physical-textbox-failure.v1"
+                      or raw.get("status") != "FAIL"
+                      or raw.get("deployment_mode") != "public_trusted_origin"
+                      or raw.get("export_target") != target):
+                  receipts.append({"target": target, "receipt": "unrecognized"})
+                  continue
+              record = {
+                  "target": target, "receipt": "failure",
+                  "phase": enum(raw.get("phase"), phases),
+                  "failure_class": enum(raw.get("failure_class"), classes),
+                  "create_reopen_contract": enum(raw.get("create_reopen_contract"), contracts),
+              }
+              for name in counts:
+                  record[name] = count(raw.get(name))
+              for name in statuses:
+                  record[name] = http_codes(raw.get(name))
+              receipts.append(record)
+
+          out = {"schema": "chaptera.public-textbox-failure-summary.v1", "receipts": receipts}
+          (root / "source-free-textbox-diagnostics.json").write_text(
+              json.dumps(out, indent=2, sort_keys=True) + "\n")
+          print("Source-neutral public TextBox diagnostic projected")
+          PY
+
       - name: Upload source-neutral public acceptance receipt
         if: always()
         uses: actions/upload-artifact@v4
@@ -907,6 +994,7 @@ jobs:
             ${{ runner.temp }}/public-v0/source-free-context.json
             ${{ runner.temp }}/public-v0/source-free-summary.json
             ${{ runner.temp }}/public-v0/source-free-textbox-summary.json
+            ${{ runner.temp }}/public-v0/source-free-textbox-diagnostics.json
           if-no-files-found: error
           retention-days: 14
 
