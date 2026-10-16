@@ -7,6 +7,7 @@ on:
       - '.github/workflows/translator-service.yml'
       - 'deploy/translator/bootstrap-host.sh'
       - 'deploy/translator/install-release.sh'
+      - 'deploy/translator/verify-staged-release.sh'
       - 'deploy/translator/chaptera-translator-api.service'
       - 'deploy/translator/chaptera-translator-worker.service'
   workflow_dispatch:
@@ -51,6 +52,7 @@ jobs:
           grep -Fq 'version = "0.6.2"' ararra/pyproject.toml
           bash -n deploy/translator/bootstrap-host.sh
           bash -n deploy/translator/install-release.sh
+          bash -n deploy/translator/verify-staged-release.sh
           curl -fsSL --retry 3 -H 'Accept: application/vnd.github+json' \
             -H "Authorization: Bearer $GH_TOKEN" \
             "https://api.github.com/repos/Lalalalendia/ararra/compare/$ARARRA_SHA...main" \
@@ -100,6 +102,7 @@ jobs:
           sha256sum -c translator-wheelhouse.sha256
           bash -n deploy/translator/bootstrap-host.sh
           bash -n deploy/translator/install-release.sh
+          bash -n deploy/translator/verify-staged-release.sh
       - name: Configure pinned SSH identity
         env:
           SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
@@ -124,12 +127,23 @@ jobs:
           scp -o BatchMode=yes -o StrictHostKeyChecking=yes \
             translator-wheelhouse.tar.gz translator-wheelhouse.sha256 \
             deploy/translator/bootstrap-host.sh deploy/translator/install-release.sh \
+            deploy/translator/verify-staged-release.sh \
             deploy/translator/chaptera-translator-api.service \
             deploy/translator/chaptera-translator-worker.service \
             "$USER@$HOST:chaptera-translator-incoming/$ARARRA_SHA/"
           ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$USER@$HOST" \
             "cd 'chaptera-translator-incoming/$ARARRA_SHA' && sha256sum -c translator-wheelhouse.sha256 --status && echo translator_staging=PASS"
           echo 'Staged release and reviewed root bootstrap; services were not changed.'
+      - name: Verify staged 0.6.2 against actual VPS (offline, transient only)
+        env:
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          USER: ${{ secrets.DEPLOY_USER }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$HOST" && test -n "$USER"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$USER@$HOST" \
+            "bash 'chaptera-translator-incoming/$ARARRA_SHA/verify-staged-release.sh' '$ARARRA_SHA'"
       - name: Install protected Gemini credential and activate only translator services
         if: github.event_name == 'workflow_dispatch' && inputs.install == 'YES'
         env:
