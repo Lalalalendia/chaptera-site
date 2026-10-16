@@ -1,0 +1,47 @@
+[Unit]
+Description=Chaptera private team translation API (loopback only)
+Wants=network-online.target
+After=network-online.target
+RequiresMountsFor=/var/lib/chaptera-translator
+StartLimitIntervalSec=90
+StartLimitBurst=4
+
+[Service]
+Type=simple
+User=chaptera-translator
+Group=chaptera-translator
+WorkingDirectory=/var/lib/chaptera-translator
+Environment=CHAPTERA_BIND=127.0.0.1
+Environment=CHAPTERA_PORT=8091
+Environment=CHAPTERA_DB_PATH=/var/lib/chaptera-translator/jobs.sqlite3
+Environment=PYTHONDONTWRITEBYTECODE=1
+LoadCredential=team_tokens_json:/etc/chaptera-translator/credentials/team_tokens_json
+ExecStart=/opt/chaptera-translator/current/venv/bin/chaptera-server serve
+Restart=on-failure
+RestartSec=8s
+TimeoutStopSec=40s
+StateDirectory=chaptera-translator
+StateDirectoryMode=0700
+UMask=0077
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectControlGroups=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+CapabilityBoundingSet=
+AmbientCapabilities=
+MemoryAccounting=yes
+MemoryHigh=112M
+MemoryMax=160M
+TasksMax=64
+LimitNOFILE=4096
+
+[Install]
+WantedBy=multi-user.target
