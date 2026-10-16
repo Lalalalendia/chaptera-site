@@ -1,0 +1,144 @@
+name: Translator Gemini full chapter 086 pilot (manual paid only)
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/translator-full-chapter-pilot.yml'
+      - 'deploy/translator/pilot-chapter-live.py'
+      - 'deploy/translator/run-full-chapter-live.sh'
+  workflow_dispatch:
+    inputs:
+      authorize_billable:
+        description: 'YES authorizes ONE paid Gemini request with the real Chapter 086 sent to Gemini'
+        type: choice
+        required: true
+        default: 'NO'
+        options: ['NO', 'YES']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: chaptera-gemini-full-chapter-086-pilot
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Validate offline syntax and release constraints
+        run: |
+          set -euo pipefail
+          python3 -m py_compile deploy/translator/pilot-chapter-live.py
+          bash -n deploy/translator/run-full-chapter-live.sh
+          grep -Fq 'chaptera-server-translator==0.6.2' deploy/translator/run-full-chapter-live.sh
+          grep -Fq 'maxOutputTokens"] = 16384' deploy/translator/pilot-chapter-live.py
+          grep -Fq 'MeteredProvider(GeminiProvider(' deploy/translator/pilot-chapter-live.py
+          echo 'real_chapter_pilot_static=PASS'
+
+  live:
+    if: github.event_name == 'workflow_dispatch' && inputs.authorize_billable == 'YES'
+    needs: validate
+    runs-on: ubuntu-24.04
+    environment: production
+    timeout-minutes: 9
+    env:
+      ARARRA_SHA: 218bea25a77e1ae5010dff2840bffc911f152823
+      PILOT_RUN_ID: ${{ github.run_id }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify paid authorization, protected secret and live script
+        env:
+          GEMINI_KEY: ${{ secrets.TRANSLATOR_GEMINI_API_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ '${{ inputs.authorize_billable }}' == 'YES' ]]
+          test -n "$GEMINI_KEY"
+          [[ "$PILOT_RUN_ID" =~ ^[0-9]{1,20}$ ]]
+          bash -n deploy/translator/run-full-chapter-live.sh
+          python3 -m py_compile deploy/translator/pilot-chapter-live.py
+      - name: Fetch and pin authentic chapter 086 (no Gemini request)
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL --retry 2 --max-time 45 \
+            'https://raw.githubusercontent.com/Lalalalendia/med/5046ff53207ce2fc89fb83277d9ceec1fee30935/corpora/fanqie/xianjie-jijian/full/chapters/086_author-086_7628922407947862553.txt' \
+            -o "$RUNNER_TEMP/fixture-086.txt"
+          test "$(git hash-object "$RUNNER_TEMP/fixture-086.txt")" = db53f9b07821d4a28ba35badb0da362613a39e50
+      - name: Configure pinned SSH identity
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$SSH_PRIVATE_KEY" && test -n "$SSH_KNOWN_HOSTS"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+      - name: Execute exactly one paid Gemini request on VPS (content not logged)
+        env:
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          USER: ${{ secrets.DEPLOY_USER }}
+          GEMINI_KEY: ${{ secrets.TRANSLATOR_GEMINI_API_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$HOST" && test -n "$USER" && test -n "$GEMINI_KEY"
+          remote="chaptera-translator-incoming/$ARARRA_SHA/paid-pilot-$PILOT_RUN_ID"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$USER@$HOST" \
+            "install -d -m 700 '$remote'"
+          scp -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            "$RUNNER_TEMP/fixture-086.txt" \
+            deploy/translator/pilot-chapter-live.py \
+            deploy/translator/run-full-chapter-live.sh \
+            "$USER@$HOST:$remote/"
+          # One protected key through authenticated SSH stdin; tar output to
+          # a private runner file, never to Actions logs or the website.
+          printf '%s\n' "$GEMINI_KEY" |
+            ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$USER@$HOST" \
+              "bash '$remote/run-full-chapter-live.sh' '$ARARRA_SHA' '$PILOT_RUN_ID'" \
+              > "$RUNNER_TEMP/chapter-086-private.tar"
+      - name: Validate private review artifact without printing chapter content
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d "$RUNNER_TEMP/chapter-086-review"
+          python3 - "$RUNNER_TEMP/chapter-086-private.tar" "$RUNNER_TEMP/chapter-086-review" <<'PY'
+          from pathlib import Path
+          import json
+          import sys
+          import tarfile
+          source, target = Path(sys.argv[1]), Path(sys.argv[2])
+          with tarfile.open(source, 'r:') as archive:
+              names = archive.getnames()
+              assert sorted(names) == ['report.json', 'translation-review.txt']
+              assert all(item.isfile() and item.size <= 300000 for item in archive.getmembers())
+              archive.extractall(target, filter='data')
+          report = json.loads((target / 'report.json').read_text(encoding='utf-8'))
+          assert report['schema'] == 'chaptera-full-chapter-live-pilot-v1'
+          assert report['provider_requests'] == 1
+          assert report['provider_successful_responses'] == 1
+          assert report['structural_qa_passed'] is True
+          assert report['pass_for_manual_review'] is True
+          print('chapter_086_real_gemini_request=ONE')
+          print('chapter_086_review_artifact=READY')
+          PY
+      - name: Preserve literary review privately for one day
+        uses: actions/upload-artifact@v4
+        with:
+          name: chaptera-private-gemini-086-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/chapter-086-review/report.json
+            ${{ runner.temp }}/chapter-086-review/translation-review.txt
+          retention-days: 1
+          if-no-files-found: error
