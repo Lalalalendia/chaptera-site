@@ -28,6 +28,30 @@ afterwards. If less than 280 MiB memory is available, staging fails closed.
 **No Gemini credential, external generateContent request, permanent API or
 systemd mutation is involved.**
 
+### Real-chapter offline stress gate
+
+The staging workflow also fetches Chapter 086 of the existing
+`Lalalalendia/med` Fanqie corpus, pinned to commit
+`5046ff53207ce2fc89fb83277d9ceec1fee30935` and Git blob
+`db53f9b07821d4a28ba35badb0da362613a39e50`. It validates the hash
+before transferring the chapter, then runs the real chapter (not a short
+synthetic phrase) through the packaged `TranslationWorker`, both transports,
+`GeminiProvider` with a **strict local MockTransport**, deterministic QA and
+a disposable SQLite database.
+
+The mock replaces Chinese characters with Cyrillic placeholders; **this is
+not a real translation and cannot establish literary quality**. Only counts,
+transport status, elapsed time and peak process RSS are reported. No source,
+prompt, simulated output or secret is printed or uploaded as an artifact.
+The temporary source is deleted on exit. If source identity changes,
+transport QA rejects the response, the request budget is exceeded, or
+available memory is insufficient, the gated workflow fails before activation.
+
+A `pull_request` runs the same source trial on GitHub runner with
+no production access; a successful merge additionally performs the trial on
+the actual VPS. Actual paid full-chapter Gemini evaluation remains a
+**separate manual operation** requiring explicit limits and review.
+
 ## Step 2 — ONE-TIME root bootstrap
 
 An administrator must first copy the reviewed files into a **root-owned,
