@@ -120,14 +120,18 @@ def main() -> int:
     args = parser.parse_args()
     if not args.authorize_billable or os.environ.get("CHAPTERA_FULL_CHAPTER_ALLOW_BILLABLE") != "YES":
         raise SystemExit("error=explicit_paid_authorization_required")
-    if not os.environ.get("CHAPTERA_GEMINI_API_KEY", "").strip():
-        raise SystemExit("error=missing_gemini_key")
     try:
         html, raw, line_count = _read_exact_source(args.chapter)
     except (OSError, ValueError, UnicodeError) as exc:
         raise SystemExit(f"error={type(exc).__name__}_invalid_source") from None
+    # Read a single API key from authenticated SSH stdin, not CLI args,
+    # environment, plaintext files or logs.
+    key = sys.stdin.readline().strip()
+    if not 20 <= len(key) <= 500 or any(ch.isspace() for ch in key):
+        raise SystemExit("error=missing_or_invalid_gemini_key")
     # A one-request model call, no automatic retry or backend services.
-    report, translation = asyncio.run(_run(html, key=os.environ["CHAPTERA_GEMINI_API_KEY"]))
+    report, translation = asyncio.run(_run(html, key=key))
+    key = ""
     report["source_utf8_bytes"] = len(raw)
     report["source_nonempty_lines"] = line_count
     output = args.output_dir
