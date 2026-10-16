@@ -15,6 +15,12 @@ on:
         required: true
         default: html_v0
         options: [html_v0, atoms_v1]
+      model:
+        description: 'Gemini model listed for generateContent by the protected VPS diagnostic'
+        type: choice
+        required: true
+        default: gemini-3.8-flash
+        options: [gemini-3.8-flash, gemini-3.6-flash, gemini-3.5-flash-lite]
 
 permissions:
   contents: read
@@ -31,6 +37,7 @@ jobs:
     env:
       ARARRA_SHA: b36add155f4eaecb65ebf13df8bcbdc44024a3e4
       LIVE_TRANSPORT: ${{ inputs.transport }}
+      LIVE_MODEL: ${{ inputs.model }}
       PAID_AUTHORIZATION: ${{ inputs.authorize_billable }}
     steps:
       - name: Verify one-request consent and protected credential availability
@@ -40,6 +47,7 @@ jobs:
           set -euo pipefail
           [[ "$PAID_AUTHORIZATION" == 'YES' ]] || { echo 'Explicit paid authorization required'; exit 2; }
           [[ "$LIVE_TRANSPORT" =~ ^(html_v0|atoms_v1)$ ]]
+          [[ "$LIVE_MODEL" =~ ^(gemini-3\.8-flash|gemini-3\.6-flash|gemini-3\.5-flash-lite)$ ]]
           test -n "$GEMINI_KEY" || { echo 'Missing protected TRANSLATOR_GEMINI_API_KEY'; exit 2; }
       - uses: actions/checkout@v4
         with:
@@ -70,4 +78,4 @@ jobs:
             deploy/translator/run-live-smoke.sh \
             "$USER@$HOST:chaptera-translator-incoming/$ARARRA_SHA/run-live-smoke.sh"
           printf '%s\n' "$GEMINI_KEY" | ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
-            "$USER@$HOST" "bash 'chaptera-translator-incoming/$ARARRA_SHA/run-live-smoke.sh' '$ARARRA_SHA' '$LIVE_TRANSPORT'"
+            "$USER@$HOST" "bash 'chaptera-translator-incoming/$ARARRA_SHA/run-live-smoke.sh' '$ARARRA_SHA' '$LIVE_TRANSPORT' '$LIVE_MODEL'"
