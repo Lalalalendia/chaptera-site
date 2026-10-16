@@ -52,6 +52,39 @@ no production access; a successful merge additionally performs the trial on
 the actual VPS. Actual paid full-chapter Gemini evaluation remains a
 **separate manual operation** requiring explicit limits and review.
 
+## Optional before bootstrap: real Gemini Chapter 086 pilot
+
+An independent [manual full-chapter pilot workflow](../../.github/workflows/translator-full-chapter-pilot.yml)
+can exercise a real book chapter on the already verified rootless VPS environment.
+It **does not install or start permanent services** and is not part of staging.
+
+To authorize **exactly one potentially billable** request, deliberately dispatch
+`main` with `authorize_billable=YES`. The default `NO` never calls Gemini.
+The entire pinned Chinese Chapter 086 is sent to the configured
+`gemini-3.8-flash` model; do not run without permission to process this text.
+The source is pinned to `med@5046ff53207ce2fc89fb83277d9ceec1fee30935`,
+with Git blob `db53f9b07821d4a28ba35badb0da362613a39e50`.
+
+Guards: real-VPS Reader must be active and MemAvailable at least 320 MiB,
+offline wheelhouse SHA256 verified, pinned source hash checked on runner and
+again by the on-host pilot, at most **one** Gemini provider call, 30,000-character
+prompt limit inherited from `MeteredProvider`, 16,384 output-token cap in
+`generationConfig`, 160-second HTTP timeout, 210-second process timeout,
+one SQLite attempt and no automatic retry. No permanent state or root required.
+
+The protected Gemini key travels over authenticated SSH **stdin only**.
+Source and a temporary SQLite database are removed on exit. The successful
+output is a *plain-text Russian candidate* and a **redacted** technical JSON
+report, delivered as a private GitHub Actions artifact with **one-day
+retention**. The translation text never appears in logs. No Notion/Rulate
+publication or reader/site changes are made.
+
+**Acceptance is structural, not literary.** A successful action means one
+full-size real-model response passed deterministic QA, broad Russian-language
+and residual-CJK signals and persisted into disposable SQLite. Character
+quality, naming, glossary consistency, translation style and factual meaning
+must be reviewed manually against the source before any publication.
+
 ## Step 2 — ONE-TIME root bootstrap
 
 An administrator must first copy the reviewed files into a **root-owned,
