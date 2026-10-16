@@ -41,7 +41,7 @@ jobs:
           echo 'real_chapter_pilot_static=PASS'
 
   live:
-    if: github.event_name == 'workflow_dispatch' && inputs.authorize_billable == 'YES'
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.authorize_billable == 'YES'
     needs: validate
     runs-on: ubuntu-24.04
     environment: production
@@ -61,6 +61,7 @@ jobs:
           set -euo pipefail
           [[ '${{ inputs.authorize_billable }}' == 'YES' ]]
           test -n "$GEMINI_KEY"
+          [[ "$GITHUB_REF" == refs/heads/main ]]
           [[ "$PILOT_RUN_ID" =~ ^[0-9]{1,20}$ ]]
           bash -n deploy/translator/run-full-chapter-live.sh
           python3 -m py_compile deploy/translator/pilot-chapter-live.py
