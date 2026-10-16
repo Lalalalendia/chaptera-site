@@ -1,0 +1,124 @@
+name: Translator rootless VPS worker smoke (offline)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/translator-rootless-smoke.yml'
+      - 'deploy/translator/run-rootless-probe.sh'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: chaptera-translator-rootless-probe
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      ARARRA_SHA: b36add155f4eaecb65ebf13df8bcbdc44024a3e4
+    steps:
+      - name: Checkout private deploy controls
+        uses: actions/checkout@v4
+      - name: Checkout pinned Ararra source
+        uses: actions/checkout@v4
+        with:
+          repository: Lalalalendia/ararra
+          ref: b36add155f4eaecb65ebf13df8bcbdc44024a3e4
+          path: ararra
+          persist-credentials: false
+      - name: Prove pinned provenance and rootless script
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$ARARRA_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$(git -C ararra rev-parse HEAD)" = "$ARARRA_SHA"
+          bash -n deploy/translator/run-rootless-probe.sh
+          # A fixed SHA must be part of ararra/main; arbitrary revisions aren't deploy authority.
+          curl -fsSL --retry 3 -H 'Accept: application/vnd.github+json' \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            "https://api.github.com/repos/Lalalalendia/ararra/compare/$ARARRA_SHA...main" \
+            | jq -e '(.status == "ahead" or .status == "identical") and .behind_by == 0' >/dev/null
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Test and build an offline-installable Python wheelhouse
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install -e './ararra[test]'
+          (cd ararra && pytest -q && python tools/check_architecture.py)
+          mkdir -p .translator-packet/wheelhouse
+          python -m pip wheel --wheel-dir .translator-packet/wheelhouse ./ararra
+          printf '%s\n' "$ARARRA_SHA" > .translator-packet/SOURCE_SHA
+          (cd .translator-packet && sha256sum wheelhouse/*.whl > SHA256SUMS)
+          tar -czf wheelhouse.tar.gz -C .translator-packet .
+          sha256sum wheelhouse.tar.gz > wheelhouse.sha256
+      - name: Publish verified wheel packet without production credentials
+        uses: actions/upload-artifact@v4
+        with:
+          name: chaptera-translator-offline-wheel-packet
+          path: |
+            wheelhouse.tar.gz
+            wheelhouse.sha256
+          if-no-files-found: error
+          retention-days: 3
+
+  smoke:
+    needs: build
+    runs-on: ubuntu-24.04
+    environment: production
+    timeout-minutes: 12
+    env:
+      ARARRA_SHA: b36add155f4eaecb65ebf13df8bcbdc44024a3e4
+    steps:
+      - name: Checkout private deploy script only
+        uses: actions/checkout@v4
+      - name: Download build packet from this workflow
+        uses: actions/download-artifact@v4
+        with:
+          name: chaptera-translator-offline-wheel-packet
+      - name: Verify artifact integrity before SSH
+        run: |
+          set -euo pipefail
+          sha256sum -c wheelhouse.sha256
+          bash -n deploy/translator/run-rootless-probe.sh
+      - name: Configure verified production SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$SSH_PRIVATE_KEY" && test -n "$SSH_KNOWN_HOSTS"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+      - name: Stage and run only the user-level translation worker smoke
+        env:
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          USER: ${{ secrets.DEPLOY_USER }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$HOST" && test -n "$USER"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$USER@$HOST" \
+            "mkdir -p 'chaptera-translator-incoming/$ARARRA_SHA'"
+          scp -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            wheelhouse.tar.gz wheelhouse.sha256 \
+            "$USER@$HOST:chaptera-translator-incoming/$ARARRA_SHA/"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$USER@$HOST" \
+            "bash -s -- '$ARARRA_SHA'" < deploy/translator/run-rootless-probe.sh
+      - name: No permanent services changed
+        if: always()
+        run: |
+          echo 'Only a user-owned Python venv and offline smoke results may have been staged.'
+          echo 'No API is bound, no systemd units are installed, and no real Gemini keys are supplied.'
