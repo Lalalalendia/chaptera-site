@@ -56,6 +56,15 @@ jobs:
           (cd ararra && pytest -q && python tools/check_architecture.py)
           mkdir -p .translator-packet/wheelhouse
           python -m pip wheel --wheel-dir .translator-packet/wheelhouse ./ararra
+          python -m pip wheel --wheel-dir .translator-packet/wheelhouse pip
+          # Exercise the exact ensurepip-free bootstrap before contacting production.
+          python -m venv --without-pip "$RUNNER_TEMP/translator-venv-smoke"
+          pip_wheel="$(find "$PWD/.translator-packet/wheelhouse" -maxdepth 1 -name 'pip-*.whl' -print -quit)"
+          test -f "$pip_wheel"
+          PYTHONPATH="$pip_wheel" "$RUNNER_TEMP/translator-venv-smoke/bin/python" -m pip install \
+            --disable-pip-version-check --no-input --no-index --no-cache-dir \
+            --find-links "$PWD/.translator-packet/wheelhouse" chaptera-server-translator==0.6.1
+          "$RUNNER_TEMP/translator-venv-smoke/bin/chaptera-smoke" --transport html_v0
           printf '%s\n' "$ARARRA_SHA" > .translator-packet/SOURCE_SHA
           (cd .translator-packet && sha256sum wheelhouse/*.whl > SHA256SUMS)
           tar -czf wheelhouse.tar.gz -C .translator-packet .
