@@ -30,9 +30,14 @@ fi
 
 install_root="$HOME/chaptera-translator-probe/$sha"
 mkdir -p "$install_root"
-python3 -m venv "$install_root/venv"
-"$install_root/venv/bin/python" -m pip install --no-input --no-index \
-  --no-cache-dir --find-links "$slot/payload/wheelhouse" chaptera-server-translator==0.6.1
+python3 -m venv --without-pip "$install_root/venv"
+# Ubuntu may ship python3 without ensurepip/python3.12-venv. Bootstrap from the
+# artifact's SHA256-verified pip wheel, never from network or apt on the host.
+bootstrap_wheel="$(find "$slot/payload/wheelhouse" -maxdepth 1 -name 'pip-*.whl' -print -quit)"
+[[ -f "$bootstrap_wheel" ]] || { printf 'error=offline_pip_wheel_missing\n' >&2; exit 2; }
+PYTHONPATH="$bootstrap_wheel" "$install_root/venv/bin/python" -m pip install \
+  --disable-pip-version-check --no-input --no-index --no-cache-dir \
+  --find-links "$slot/payload/wheelhouse" chaptera-server-translator==0.6.1
 
 for transport in html_v0 atoms_v1; do
   timeout 90s nice -n 10 "$install_root/venv/bin/chaptera-smoke" \
