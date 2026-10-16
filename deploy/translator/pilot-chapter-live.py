@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-from dataclasses import replace
+import httpx
 from hashlib import sha1
 from html import escape
 import json
@@ -48,51 +48,68 @@ def _read_exact_source(path: Path) -> tuple[str, bytes, int]:
     return html, raw, len(nonempty)
 
 
+class _CappedClient:
+    """Delegate to httpx while enforcing a provider-side maxOutputTokens cap."""
+
+    def __init__(self, client: httpx.AsyncClient):
+        self.client = client
+
+    async def post(self, url: str, *, headers: dict, json: dict):
+        payload = dict(json)
+        config = dict(payload.get("generationConfig") or {})
+        config["maxOutputTokens"] = 16384
+        payload["generationConfig"] = config
+        return await self.client.post(url, headers=headers, json=payload)
+
+
 async def _run(html: str, *, key: str) -> tuple[dict, str]:
     if not key:
         raise ValueError("missing_api_key")
-    provider = MeteredProvider(GeminiProvider(key, "gemini-3.8-flash", timeout_seconds=160), 1)
-    with TemporaryDirectory(prefix="chaptera-billable-pilot-") as folder:
-        queue = QueueStore(Path(folder) / "chapter-pilot.sqlite3")
-        job = queue.create_job("explicit-pilot", JobSpec(
-            chapter_id="086",
-            source_html=html,
-            transport="html_v0",
-            max_attempts=1,
-        ))
-        started = monotonic()
-        claimed = await TranslationWorker(queue, provider).run_once()
-        saved = queue.get_job(job["id"])
-        completed = bool(claimed and saved and saved["status"] == "completed")
-        translated = saved["translated_html"] if completed else ""
-        visible = BeautifulSoup(translated, "html.parser").get_text(" ", strip=True)
-        remaining_cjk = len(_CJK.findall(visible))
-        has_russian = bool(re.search(r"[А-Яа-яЁё]", visible))
-        report = {
-            "schema": "chaptera-full-chapter-live-pilot-v1",
-            "source_book": "xianjie-jijian",
-            "chapter_number": 86,
-            "model": "gemini-3.8-flash",
-            "transport": "html_v0",
-            "mode": "ONE_EXPLICITLY_AUTHORIZED_LIVE_CALL",
-            "provider_requests": provider.requests,
-            "provider_successful_responses": provider.responses,
-            "job_status": saved["status"] if saved else "missing",
-            "structural_qa_passed": completed,
-            "russian_character_signal": has_russian,
-            "remaining_source_cjk_chars": remaining_cjk,
-            "output_visible_chars": len(visible),
-            "unit_count": saved["unit_count"] if completed else None,
-            "provider_token_usage": provider.usage or None,
-            "elapsed_seconds": round(monotonic() - started, 2),
-            "peak_rss_mib": round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024, 1),
-            "literary_quality_checked": False,
-            "pass_for_manual_review": completed and has_russian,
-            "failure_category": provider.failure or (
-                "worker_or_structure_qa" if not completed else None
-            ),
-        }
-        return report, translated
+    async with httpx.AsyncClient(timeout=160) as client:
+        provider = MeteredProvider(GeminiProvider(
+            key, "gemini-3.8-flash", client=_CappedClient(client), timeout_seconds=160,
+        ), 1)
+        with TemporaryDirectory(prefix="chaptera-billable-pilot-") as folder:
+            queue = QueueStore(Path(folder) / "chapter-pilot.sqlite3")
+            job = queue.create_job("explicit-pilot", JobSpec(
+                chapter_id="086",
+                source_html=html,
+                transport="html_v0",
+                max_attempts=1,
+            ))
+            started = monotonic()
+            claimed = await TranslationWorker(queue, provider).run_once()
+            saved = queue.get_job(job["id"])
+            completed = bool(claimed and saved and saved["status"] == "completed")
+            translated = saved["translated_html"] if completed else ""
+            visible = BeautifulSoup(translated, "html.parser").get_text(" ", strip=True)
+            remaining_cjk = len(_CJK.findall(visible))
+            has_russian = bool(re.search(r"[А-Яа-яЁё]", visible))
+            report = {
+                "schema": "chaptera-full-chapter-live-pilot-v1",
+                "source_book": "xianjie-jijian",
+                "chapter_number": 86,
+                "model": "gemini-3.8-flash",
+                "transport": "html_v0",
+                "mode": "ONE_EXPLICITLY_AUTHORIZED_LIVE_CALL",
+                "provider_requests": provider.requests,
+                "provider_successful_responses": provider.responses,
+                "job_status": saved["status"] if saved else "missing",
+                "structural_qa_passed": completed,
+                "russian_character_signal": has_russian,
+                "remaining_source_cjk_chars": remaining_cjk,
+                "output_visible_chars": len(visible),
+                "unit_count": saved["unit_count"] if completed else None,
+                "provider_token_usage": provider.usage or None,
+                "elapsed_seconds": round(monotonic() - started, 2),
+                "peak_rss_mib": round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024, 1),
+                "literary_quality_checked": False,
+                "pass_for_manual_review": completed and has_russian,
+                "failure_category": provider.failure or (
+                    "worker_or_structure_qa" if not completed else None
+                ),
+            }
+            return report, translated
 
 
 def main() -> int:
@@ -117,8 +134,9 @@ def main() -> int:
     output.mkdir(mode=0o700, parents=True, exist_ok=True)
     (output / "report.json").write_text(json.dumps(report, ensure_ascii=False, sort_keys=True) + "\n", encoding="utf-8")
     if translation:
-        (output / "translation-review.html").write_text(translation, encoding="utf-8")
-        os.chmod(output / "translation-review.html", 0o600)
+        rendered = BeautifulSoup(translation, "html.parser").get_text("\\n", strip=True)
+        (output / "translation-review.txt").write_text(rendered + "\\n", encoding="utf-8")
+        os.chmod(output / "translation-review.txt", 0o600)
     os.chmod(output / "report.json", 0o600)
     return 0 if report["pass_for_manual_review"] else 1
 
