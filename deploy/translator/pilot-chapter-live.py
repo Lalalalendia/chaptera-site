@@ -134,8 +134,8 @@ def main() -> int:
     output.mkdir(mode=0o700, parents=True, exist_ok=True)
     (output / "report.json").write_text(json.dumps(report, ensure_ascii=False, sort_keys=True) + "\n", encoding="utf-8")
     if translation:
-        rendered = BeautifulSoup(translation, "html.parser").get_text("\\n", strip=True)
-        (output / "translation-review.txt").write_text(rendered + "\\n", encoding="utf-8")
+        rendered = BeautifulSoup(translation, "html.parser").get_text("\n", strip=True)
+        (output / "translation-review.txt").write_text(rendered + "\n", encoding="utf-8")
         os.chmod(output / "translation-review.txt", 0o600)
     os.chmod(output / "report.json", 0o600)
     return 0 if report["pass_for_manual_review"] else 1
