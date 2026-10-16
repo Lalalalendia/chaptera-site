@@ -2,6 +2,8 @@
 Description=Chaptera private team translation API (loopback only)
 Wants=network-online.target
 After=network-online.target
+# Enabled units must remain inert before the first verified release install.
+ConditionPathExists=/opt/chaptera-translator/current/venv/bin/chaptera-server
 RequiresMountsFor=/var/lib/chaptera-translator
 StartLimitIntervalSec=90
 StartLimitBurst=4
