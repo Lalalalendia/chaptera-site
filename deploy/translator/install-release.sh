@@ -74,16 +74,18 @@ pip_wheel="$(find "$scratch/wheelhouse" -maxdepth 1 -type f -name 'pip-*.whl' -p
 [[ -f "$pip_wheel" ]] || { echo 'error=offline_pip_wheel_missing' >&2; exit 3; }
 if [[ ! -x "$release/venv/bin/chaptera-server" ]]; then
   if [[ -e "$release" ]]; then echo 'error=partial_release_exists' >&2; exit 3; fi
-  install_dir="$(mktemp -d "$root/releases/.stage-$sha.XXXXXX")"
-  python3 -m venv --without-pip "$install_dir/venv"
-  PYTHONPATH="$pip_wheel" "$install_dir/venv/bin/python" -m pip install \
+  # Install in the final immutable SHA path: venv console scripts have absolute
+  # shebangs and cannot be relocated after pip has generated them.
+  install -d -m 0755 "$release"
+  install_dir="$release"
+  python3 -m venv --without-pip "$release/venv"
+  PYTHONPATH="$pip_wheel" "$release/venv/bin/python" -m pip install \
     --disable-pip-version-check --no-input --no-index --no-cache-dir \
     --find-links "$scratch/wheelhouse" chaptera-server-translator==0.6.2 >/dev/null
-  test -x "$install_dir/venv/bin/chaptera-server"
-  printf '%s\n' "$sha" > "$install_dir/SOURCE_SHA"
-  chmod -R go-w "$install_dir"
-  chmod 0755 "$install_dir"
-  mv -T "$install_dir" "$release"
+  test -x "$release/venv/bin/chaptera-server"
+  printf '%s\n' "$sha" > "$release/SOURCE_SHA"
+  chmod -R go-w "$release"
+  chmod 0755 "$release"
   install_dir=''
 else
   [[ "$(cat "$release/SOURCE_SHA")" == "$sha" ]] || {
