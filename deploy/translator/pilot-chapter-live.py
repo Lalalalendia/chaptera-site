@@ -84,7 +84,10 @@ async def _run(html: str, *, key: str) -> tuple[dict, str]:
             translated = saved["translated_html"] if completed else ""
             visible = BeautifulSoup(translated, "html.parser").get_text(" ", strip=True)
             remaining_cjk = len(_CJK.findall(visible))
-            has_russian = bool(re.search(r"[А-Яа-яЁё]", visible))
+            source_cjk = len(_CJK.findall(html))
+            russian_letters = len(re.findall(r"[А-Яа-яЁё]", visible))
+            has_russian = russian_letters >= max(600, len(visible) // 3)
+            source_language_coverage_ok = remaining_cjk <= max(30, int(source_cjk * 0.03))
             report = {
                 "schema": "chaptera-full-chapter-live-pilot-v1",
                 "source_book": "xianjie-jijian",
@@ -97,6 +100,8 @@ async def _run(html: str, *, key: str) -> tuple[dict, str]:
                 "job_status": saved["status"] if saved else "missing",
                 "structural_qa_passed": completed,
                 "russian_character_signal": has_russian,
+                "source_language_coverage_ok": source_language_coverage_ok,
+                "source_cjk_chars": source_cjk,
                 "remaining_source_cjk_chars": remaining_cjk,
                 "output_visible_chars": len(visible),
                 "unit_count": saved["unit_count"] if completed else None,
@@ -104,7 +109,7 @@ async def _run(html: str, *, key: str) -> tuple[dict, str]:
                 "elapsed_seconds": round(monotonic() - started, 2),
                 "peak_rss_mib": round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024, 1),
                 "literary_quality_checked": False,
-                "pass_for_manual_review": completed and has_russian,
+                "pass_for_manual_review": completed and has_russian and source_language_coverage_ok,
                 "failure_category": provider.failure or (
                     "worker_or_structure_qa" if not completed else None
                 ),
