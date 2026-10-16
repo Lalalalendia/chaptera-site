@@ -11,6 +11,15 @@ on:
       - 'deploy/translator/pilot-chapter-offline.py'
       - 'deploy/translator/chaptera-translator-api.service'
       - 'deploy/translator/chaptera-translator-worker.service'
+  pull_request:
+    paths:
+      - '.github/workflows/translator-service.yml'
+      - 'deploy/translator/bootstrap-host.sh'
+      - 'deploy/translator/install-release.sh'
+      - 'deploy/translator/verify-staged-release.sh'
+      - 'deploy/translator/pilot-chapter-offline.py'
+      - 'deploy/translator/chaptera-translator-api.service'
+      - 'deploy/translator/chaptera-translator-worker.service'
   workflow_dispatch:
     inputs:
       install:
@@ -75,6 +84,27 @@ jobs:
           (cd .translator-packet && sha256sum wheelhouse/*.whl > SHA256SUMS)
           tar -czf translator-wheelhouse.tar.gz -C .translator-packet .
           sha256sum translator-wheelhouse.tar.gz > translator-wheelhouse.sha256
+      - name: Validate chapter-086 structural mock against pinned Ararra on runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          fixture="$RUNNER_TEMP/fixture-086.txt"
+          curl -fsSL --retry 2 --max-time 45 \
+            'https://raw.githubusercontent.com/Lalalalendia/med/5046ff53207ce2fc89fb83277d9ceec1fee30935/corpora/fanqie/xianjie-jijian/full/chapters/086_author-086_7628922407947862553.txt' \
+            -o "$fixture"
+          test "$(git hash-object "$fixture")" = db53f9b07821d4a28ba35badb0da362613a39e50
+          env -u CHAPTERA_GEMINI_API_KEY -u CREDENTIALS_DIRECTORY \
+            timeout 120s python deploy/translator/pilot-chapter-offline.py "$fixture" \
+            > "$RUNNER_TEMP/chapter-086-report.json"
+          python - "$RUNNER_TEMP/chapter-086-report.json" <<'PY'
+          import json,sys
+          report=json.load(open(sys.argv[1],encoding='utf-8'))
+          assert report['schema'] == 'chaptera-real-source-offline-v1'
+          assert report['gemini_network_calls'] == 0
+          assert all(item['status'] == 'PASS' for item in report['results'])
+          for item in report['results']:
+              print(f"runner_real_chapter_{item['transport']}=PASS")
+          PY
       - uses: actions/upload-artifact@v4
         with:
           name: chaptera-translator-0.6.2-pinned-wheelhouse
@@ -86,6 +116,7 @@ jobs:
 
   stage:
     needs: build
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-24.04
     environment: production
     timeout-minutes: 9
