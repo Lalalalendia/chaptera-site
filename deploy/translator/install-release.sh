@@ -20,8 +20,8 @@ if [[ ! -f "$slot/translator-wheelhouse.tar.gz" || ! -f "$slot/translator-wheelh
 fi
 (cd "$slot" && sha256sum -c translator-wheelhouse.sha256 --status)
 available="$(awk '/^MemAvailable:/ { print int($2/1024) }' /proc/meminfo)"
-if [[ ! "$available" =~ ^[0-9]+$ ]] || (( available < 170 )); then
-  echo 'error=insufficient_available_memory' >&2; exit 3
+if [[ ! "$available" =~ ^[0-9]+$ ]] || (( available < 320 )); then
+  echo 'error=insufficient_available_memory_for_persistent_services' >&2; exit 3
 fi
 for name in chaptera-translator-api.service chaptera-translator-worker.service; do
   test -f "/etc/systemd/system/$name" || { echo "error=missing_$name" >&2; exit 3; }
