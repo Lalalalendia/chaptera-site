@@ -1,0 +1,60 @@
+name: Translator VPS preflight (read-only)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/translator-host-preflight.yml'
+      - 'deploy/translator/host-preflight.sh'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: chaptera-translator-host-preflight
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    runs-on: ubuntu-24.04
+    environment: production
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate read-only host probe
+        run: |
+          set -euo pipefail
+          bash -n deploy/translator/host-preflight.sh
+          ! grep -Eq '(^|[[:space:]])(apt|apt-get|pip|docker[[:space:]]+(run|pull)|rm|mv|cp|mkdir|systemctl[[:space:]]+(start|restart|stop)|sudo[[:space:]]+(bash|sh))([[:space:]]|$)' deploy/translator/host-preflight.sh
+      - name: Configure pinned SSH host identity
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$SSH_PRIVATE_KEY" && test -n "$SSH_KNOWN_HOSTS"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+      - name: Check VPS capabilities without changing state
+        env:
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          USER: ${{ secrets.DEPLOY_USER }}
+        run: |
+          set -euo pipefail
+          test -n "$HOST" && test -n "$USER"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=10 \
+            "$USER@$HOST" 'bash -s' < deploy/translator/host-preflight.sh \
+            | tee "$RUNNER_TEMP/translator-preflight.txt"
+          grep -q '^preflight_completed=yes$' "$RUNNER_TEMP/translator-preflight.txt"
+      - name: Upload sanitized preflight report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: chaptera-translator-host-preflight
+          path: ${{ runner.temp }}/translator-preflight.txt
+          if-no-files-found: ignore
+          retention-days: 7
