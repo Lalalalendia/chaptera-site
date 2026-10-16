@@ -1,0 +1,53 @@
+name: Translator HTTP loopback VPS end-to-end smoke (offline)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/translator-http-loopback-smoke.yml'
+      - 'deploy/translator/run-http-loopback-probe.sh'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: chaptera-translator-rootless-http-probe
+  cancel-in-progress: false
+
+jobs:
+  http-probe:
+    runs-on: ubuntu-24.04
+    environment: production
+    timeout-minutes: 7
+    env:
+      ARARRA_SHA: b36add155f4eaecb65ebf13df8bcbdc44024a3e4
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Check temporary HTTP probe script
+        run: |
+          set -euo pipefail
+          bash -n deploy/translator/run-http-loopback-probe.sh
+      - name: Configure pinned SSH identity
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$SSH_PRIVATE_KEY" && test -n "$SSH_KNOWN_HOSTS"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+      - name: Prove API to queue to worker to result on VPS loopback
+        env:
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          USER: ${{ secrets.DEPLOY_USER }}
+        run: |
+          set -euo pipefail
+          test -n "$HOST" && test -n "$USER"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$USER@$HOST" \
+            "bash -s -- '$ARARRA_SHA'" < deploy/translator/run-http-loopback-probe.sh
