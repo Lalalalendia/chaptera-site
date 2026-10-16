@@ -1,0 +1,156 @@
+name: Stage / deploy private Gemini translator (pinned, no auto-install)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/translator-service.yml'
+      - 'deploy/translator/bootstrap-host.sh'
+      - 'deploy/translator/install-release.sh'
+      - 'deploy/translator/chaptera-translator-api.service'
+      - 'deploy/translator/chaptera-translator-worker.service'
+  workflow_dispatch:
+    inputs:
+      install:
+        description: 'NO: only stage on VPS; YES: activate systemd services after one-time root bootstrap'
+        type: choice
+        required: true
+        default: 'NO'
+        options: ['NO', 'YES']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: chaptera-translator-private-service-deploy
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 16
+    env:
+      ARARRA_SHA: 218bea25a77e1ae5010dff2840bffc911f152823
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: Lalalalendia/ararra
+          ref: 218bea25a77e1ae5010dff2840bffc911f152823
+          path: ararra
+          persist-credentials: false
+      - name: Verify exact Ararra version and protected main ancestry
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C ararra rev-parse HEAD)" = "$ARARRA_SHA"
+          grep -Fq 'version = "0.6.2"' ararra/pyproject.toml
+          bash -n deploy/translator/bootstrap-host.sh
+          bash -n deploy/translator/install-release.sh
+          curl -fsSL --retry 3 -H 'Accept: application/vnd.github+json' \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            "https://api.github.com/repos/Lalalalendia/ararra/compare/$ARARRA_SHA...main" \
+            | jq -e '(.status == "ahead" or .status == "identical") and .behind_by == 0' >/dev/null
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Build tested, hash-verified, offline wheelhouse
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install -e './ararra[test]'
+          (cd ararra && pytest -q && python tools/check_architecture.py)
+          mkdir -p .translator-packet/wheelhouse
+          python -m pip wheel --wheel-dir .translator-packet/wheelhouse ./ararra
+          python -m pip wheel --wheel-dir .translator-packet/wheelhouse pip
+          printf '%s\n' "$ARARRA_SHA" > .translator-packet/SOURCE_SHA
+          (cd .translator-packet && sha256sum wheelhouse/*.whl > SHA256SUMS)
+          tar -czf translator-wheelhouse.tar.gz -C .translator-packet .
+          sha256sum translator-wheelhouse.tar.gz > translator-wheelhouse.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: chaptera-translator-0.6.2-pinned-wheelhouse
+          path: |
+            translator-wheelhouse.tar.gz
+            translator-wheelhouse.sha256
+          if-no-files-found: error
+          retention-days: 5
+
+  stage:
+    needs: build
+    runs-on: ubuntu-24.04
+    environment: production
+    timeout-minutes: 9
+    env:
+      ARARRA_SHA: 218bea25a77e1ae5010dff2840bffc911f152823
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: chaptera-translator-0.6.2-pinned-wheelhouse
+      - name: Verify distribution integrity before SSH
+        run: |
+          set -euo pipefail
+          sha256sum -c translator-wheelhouse.sha256
+          bash -n deploy/translator/bootstrap-host.sh
+          bash -n deploy/translator/install-release.sh
+      - name: Configure pinned SSH identity
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$SSH_PRIVATE_KEY" && test -n "$SSH_KNOWN_HOSTS"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+      - name: Stage and verify release without starting services
+        env:
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          USER: ${{ secrets.DEPLOY_USER }}
+        run: |
+          set -euo pipefail
+          test -n "$HOST" && test -n "$USER"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$USER@$HOST" \
+            "install -d -m 700 'chaptera-translator-incoming/$ARARRA_SHA'"
+          scp -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            translator-wheelhouse.tar.gz translator-wheelhouse.sha256 \
+            deploy/translator/bootstrap-host.sh deploy/translator/install-release.sh \
+            deploy/translator/chaptera-translator-api.service \
+            deploy/translator/chaptera-translator-worker.service \
+            "$USER@$HOST:chaptera-translator-incoming/$ARARRA_SHA/"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$USER@$HOST" \
+            "cd 'chaptera-translator-incoming/$ARARRA_SHA' && sha256sum -c translator-wheelhouse.sha256 --status && echo translator_staging=PASS"
+          echo 'Staged release and reviewed root bootstrap; services were not changed.'
+      - name: Install protected Gemini credential and activate only translator services
+        if: github.event_name == 'workflow_dispatch' && inputs.install == 'YES'
+        env:
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          USER: ${{ secrets.DEPLOY_USER }}
+          GEMINI_KEY: ${{ secrets.TRANSLATOR_GEMINI_API_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$GEMINI_KEY" || { echo 'Missing protected translator Gemini key'; exit 2; }
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$USER@$HOST" \
+            "test -f /etc/chaptera-translator/.bootstrapped && test -d /etc/chaptera-translator/credentials" || {
+              echo 'One-time root bootstrap missing. Leave services unchanged.'
+              exit 3
+            }
+          printf '%s\n' "$GEMINI_KEY" | ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            "$USER@$HOST" 'umask 077; cd /etc/chaptera-translator/credentials && tmp=$(mktemp .gemini.XXXXXX) && cat > "$tmp" && test -s "$tmp" && chmod 600 "$tmp" && mv -f "$tmp" gemini_api_key'
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$USER@$HOST" \
+            "bash 'chaptera-translator-incoming/$ARARRA_SHA/install-release.sh' '$ARARRA_SHA'"
+      - name: Record no-billable-deploy scope
+        if: always()
+        run: |
+          echo 'No paid Gemini translation requests are executed by this workflow.'
+          echo 'Translator API, if installed, binds only 127.0.0.1:8091.'
