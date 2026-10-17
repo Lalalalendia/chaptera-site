@@ -119,8 +119,39 @@ target = restore(manifest, recovery / "isolated-recovered.sqlite3")
 with sqlite3.connect(target) as con:
     assert con.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
     assert con.execute("SELECT id FROM jobs").fetchone()[0] == job["id"]
+from chaptera_server.ops_backup_crypto import (
+    BackupRejected, generate_key, seal, unseal,
+)
+keydir = work / "ephemeral-keys"
+keydir.mkdir(mode=0o700)
+keyfile = generate_key(keydir / "readera-test.key")
+encrypted = work / "ephemeral-encrypted"
+encrypted.mkdir(mode=0o700)
+bundle = seal(manifest, keyfile, encrypted)
+encrypted_restore = work / "ephemeral-encrypted-recovery"
+encrypted_restore.mkdir(mode=0o700)
+recovered = unseal(bundle, keyfile, encrypted_restore / "recovered.sqlite3")
+with sqlite3.connect(recovered) as con:
+    assert con.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+    assert con.execute("SELECT id FROM jobs").fetchone()[0] == job["id"]
+assert b"offline fixture" not in bundle.read_bytes()
+# Corrupt the authenticated tag: no partial database must be published.
+with bundle.open("r+b") as raw:
+    raw.seek(-1, 2)
+    original_tag_byte = raw.read(1)
+    raw.seek(-1, 2)
+    raw.write(bytes([original_tag_byte[0] ^ 1]))
+blocked_path = encrypted_restore / "must-not-exist.sqlite3"
+try:
+    unseal(bundle, keyfile, blocked_path)
+except BackupRejected:
+    assert not blocked_path.exists()
+else:
+    raise AssertionError("AES-GCM tag forgery was accepted")
 print("stage_sqlite_online_snapshot=PASS")
 print("stage_sqlite_offline_restore=PASS")
+print("stage_sqlite_encrypted_bundle=PASS")
+print("stage_sqlite_encrypted_tamper_rejected=PASS")
 print("live_translator_database_access=no")
 PY
 

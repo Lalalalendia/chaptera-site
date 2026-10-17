@@ -5,7 +5,7 @@ It never changes Reader binaries, Nginx, the landing, or the Reader database.
 
 ## Verified baseline
 
-- Pinned Ararra main SHA: `a757768713a76424cc3573b4434c52d47c923426`, wheel `0.6.2`.
+- Pinned Ararra main SHA: `a7e50873bb90a0263876e1329db946ae485932d6`, wheel `0.6.2`.
 - Gemini `gemini-3.8-flash`: a real, synthetic translation on the VPS passed structural QA and SQLite persistence.
 - VPS: Python 3.12, 891 MiB RAM, approximately 354 MiB MemAvailable at last probe, existing Reader service and ~2 GiB swap.
 - SSH deploy user has no general sudo or Docker access.
@@ -29,7 +29,7 @@ the exact pinned GitHub source and tests, then builds a SHA-256-verified offline
 wheelhouse. The second uses protected production SSH to stage the archive and
 the installation scripts under:
 
-`~/chaptera-translator-incoming/a757768713a76424cc3573b4434c52d47c923426/`
+`~/chaptera-translator-incoming/a7e50873bb90a0263876e1329db946ae485932d6/`
 
 The stage job also installs the verified wheelhouse into a **temporary** user-owned
 virtual environment on the VPS, then executes `html_v0` and `atoms_v1` mock
@@ -105,7 +105,7 @@ would allow replacement between review and execution. Example for the
 different):
 
 ```bash
-STAGED=/home/chaptera-deploy/chaptera-translator-incoming/a757768713a76424cc3573b4434c52d47c923426
+STAGED=/home/chaptera-deploy/chaptera-translator-incoming/a7e50873bb90a0263876e1329db946ae485932d6
 sudo install -d -o root -g root -m 0700 /root/chaptera-translator-bootstrap
 sudo install -o root -g root -m 0700 "$STAGED/bootstrap-host.sh" /root/chaptera-translator-bootstrap/
 sudo install -o root -g root -m 0644 "$STAGED/chaptera-translator-api.service" /root/chaptera-translator-bootstrap/
@@ -122,6 +122,21 @@ API token without printing it. The deploy user receives sudo rights only for
 start/stop/restart of the two named translator units. The units are enabled
 but contain `ConditionPathExists` guards: reboot before release installation
 skips them rather than repeatedly starting a missing executable.
+
+### RE-08 encrypted recovery staging
+
+The pinned `ararra` wheel includes `chaptera_server.ops_backup_crypto`.
+The rootless VPS stage creates a **disposable** AES-256-GCM key in a
+temporary 0700 directory, seals the disposable SQLite snapshot, restores
+it to another disposable database, and verifies that a corrupted
+authentication tag is rejected without publishing a partial database.
+All temporary plaintext, ciphertext and key files are deleted on exit.
+There is no production key in this operation.
+
+This is only a local cryptographic round-trip on the actual VPS. It does
+not create encrypted offsite backups, configure S3/Drive, install services,
+or restore production data. See the [ReadEra recovery guide](https://github.com/Lalalalendia/ararra/blob/main/docs/RE08_SQLITE_RECOVERY.md)
+and [acceptance issue #56](https://github.com/Lalalalendia/ararra/issues/56).
 
 The rootless VPS staged test additionally validates
 `chaptera_server.ops_backup` against a disposable SQLite database: online
