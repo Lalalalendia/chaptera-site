@@ -192,3 +192,75 @@ jobs:
           ' >/dev/null
 
           echo "Validated auto-deploy candidate $tag"
+
+  public-edge-header-witness:
+    name: Public Reader edge headers (read-only)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - name: Source-neutral public Reader edge headers
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+          import re
+          import urllib.error
+          import urllib.request
+
+          # GET-only evidence: no authentication, source documents, session
+          # tokens, private hosts, SSH or other production mutations.
+          class NoRedirect(urllib.request.HTTPRedirectHandler):
+              def redirect_request(self, req, fp, code, msg, hdrs, newurl):
+                  return None
+
+          opener = urllib.request.build_opener(NoRedirect())
+          results = {}
+          checks = (
+              ("http_redirect", "http://reader.chaptera.online/", 301),
+              ("https_reader", "https://reader.chaptera.online/", 200),
+          )
+          for name, url, expected in checks:
+              request = urllib.request.Request(url, method="GET")
+              try:
+                  with opener.open(request, timeout=20) as response:
+                      status, headers = response.status, response.headers
+              except urllib.error.HTTPError as response:
+                  status, headers = response.code, response.headers
+
+              server = headers.get("Server", "")
+              results[name] = {
+                  "http_status": status,
+                  "expected_status": status in ({301, 308} if name == "http_redirect" else {200}),
+                  "server_header_present": bool(server),
+                  "server_version_exposed": bool(re.search(r"/[0-9]+(?:\.[0-9]+)*", server)),
+                  "hsts_present": bool(headers.get("Strict-Transport-Security")),
+                  "csp_present": bool(headers.get("Content-Security-Policy")),
+                  "redirect_to_exact_https": (
+                      headers.get("Location", "") == "https://reader.chaptera.online/"
+                      if name == "http_redirect" else None
+                  ),
+              }
+
+          report = {"schema": "chaptera.public-edge-headers.v1", "results": results}
+          print(json.dumps(report, sort_keys=True, separators=(",", ":")))
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as out:
+              out.write("### Read-only public Reader edge evidence\n\n")
+              out.write("| Response | HTTP | Server header | Server version | HSTS | CSP |\n")
+              out.write("|---|---|---|---|---|---|\n")
+              for name, row in results.items():
+                  out.write(
+                      f"| {name} | {row['http_status']} | {row['server_header_present']} "
+                      f"| {row['server_version_exposed']} | {row['hsts_present']} "
+                      f"| {row['csp_present']} |\n"
+                  )
+              out.write("\nNo raw Server value, cookies, tokens, source bytes or session identifiers collected.\n")
+
+          if not all(row["expected_status"] for row in results.values()):
+              raise SystemExit("public Reader HTTP/HTTPS response status unexpected")
+          if results["http_redirect"]["redirect_to_exact_https"] is not True:
+              raise SystemExit("public Reader HTTP redirect target unexpected")
+          # Existing security issue is recorded as evidence; do not invent a
+          # new service configuration or bypass prod acceptance in this probe.
+          PY
