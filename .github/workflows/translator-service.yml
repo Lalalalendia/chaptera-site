@@ -60,6 +60,9 @@ jobs:
           set -euo pipefail
           test "$(git -C ararra rev-parse HEAD)" = "$ARARRA_SHA"
           grep -Fq 'version = "0.6.2"' ararra/pyproject.toml
+          # Rootless VPS stage now depends on the RE-08 recovery module.
+          test -s ararra/src/chaptera_server/ops_backup.py
+          grep -Fq 'proxy_headers=False' ararra/src/chaptera_server/cli.py
           grep -Fqx 'Environment=CHAPTERA_ADMIN_MEMBER_ID=operator' deploy/translator/chaptera-translator-api.service
           grep -Fqx 'Environment=CHAPTERA_BIND=127.0.0.1' deploy/translator/chaptera-translator-api.service
           grep -Fqx 'Environment=CHAPTERA_PORT=8091' deploy/translator/chaptera-translator-api.service
