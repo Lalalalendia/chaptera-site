@@ -56,7 +56,7 @@ python3 -m venv --without-pip "$work/venv"
 PYTHONPATH="$pip_wheel" "$work/venv/bin/python" -m pip install \
   --disable-pip-version-check --no-input --no-index --no-cache-dir \
   --find-links "$work/unpacked/wheelhouse" \
-  chaptera-server-translator==0.6.2 > /dev/null
+  'chaptera-server-translator[offsite-s3]==0.6.2' > /dev/null
 
 for transport in html_v0 atoms_v1; do
   env -u CHAPTERA_GEMINI_API_KEY -u CREDENTIALS_DIRECTORY \
@@ -135,6 +135,50 @@ with sqlite3.connect(recovered) as con:
     assert con.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
     assert con.execute("SELECT id FROM jobs").fetchone()[0] == job["id"]
 assert b"offline fixture" not in bundle.read_bytes()
+# No external cloud access, secrets, root, or live SQLite. The staged wheel has
+# boto3/botocore, and the SDK must understand conditional writes for both
+# single-part and multipart S3. Fake storage checks ReadEra's streaming logic.
+import io
+import boto3
+sdk = boto3.client("s3", region_name="us-east-1",
+                   aws_access_key_id="ephemeral-test", aws_secret_access_key="ephemeral-test")
+for operation in ("PutObject", "CompleteMultipartUpload"):
+    assert "IfNoneMatch" in sdk.meta.service_model.operation_model(operation).input_shape.members
+from chaptera_server.ops_backup_s3 import S3BackupTransport
+class OnlyDisposableCiphertext:
+    def __init__(self):
+        self.objects = {}
+    def put_object(self, **kwargs):
+        assert kwargs["IfNoneMatch"] == "*"
+        assert kwargs["Key"] not in self.objects
+        raw = kwargs["Body"].read()
+        assert len(raw) == kwargs["ContentLength"]
+        assert b"offline fixture" not in raw
+        self.objects[kwargs["Key"]] = (raw, kwargs["Metadata"])
+        return {"ETag": '"fake"'}
+    def head_object(self, *, Bucket, Key):
+        raw, metadata = self.objects[Key]
+        return {"ContentLength": len(raw), "Metadata": metadata}
+    def get_object(self, *, Bucket, Key):
+        raw, metadata = self.objects[Key]
+        return {"ContentLength": len(raw), "Body": io.BytesIO(raw)}
+fake = OnlyDisposableCiphertext()
+s3 = S3BackupTransport(fake, bucket="readera-private-test", vault="vps-stage-01")
+receipt = s3.push(bundle)
+assert receipt["verified"] and receipt["bytes"] == bundle.stat().st_size
+assert s3.check_remote(bundle.name)["verified"]
+download_dir = work / "temporary-s3-download"
+download_dir.mkdir(mode=0o700)
+downloaded = s3.pull(bundle.name, download_dir)
+s3_recover_dir = work / "temporary-s3-restore"
+s3_recover_dir.mkdir(mode=0o700)
+s3_restored = unseal(downloaded, keyfile, s3_recover_dir / "jobs.sqlite3")
+with sqlite3.connect(s3_restored) as con:
+    assert con.execute("SELECT id FROM jobs").fetchone()[0] == job["id"]
+print("stage_s3_sdk_conditional_support=PASS")
+print("stage_s3_disposable_upload_readback=PASS")
+print("stage_s3_disposable_download_restore=PASS")
+print("offhost_network_calls=0")
 # Corrupt the authenticated tag: no partial database must be published.
 with bundle.open("r+b") as raw:
     raw.seek(-1, 2)

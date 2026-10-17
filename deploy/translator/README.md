@@ -5,7 +5,7 @@ It never changes Reader binaries, Nginx, the landing, or the Reader database.
 
 ## Verified baseline
 
-- Pinned Ararra main SHA: `a7e50873bb90a0263876e1329db946ae485932d6`, wheel `0.6.2`.
+- Pinned Ararra main SHA: `b4f81f6e2598d422ad06b7db91e5b805dd008c86`, wheel `0.6.2`.
 - Gemini `gemini-3.8-flash`: a real, synthetic translation on the VPS passed structural QA and SQLite persistence.
 - VPS: Python 3.12, 891 MiB RAM, approximately 354 MiB MemAvailable at last probe, existing Reader service and ~2 GiB swap.
 - SSH deploy user has no general sudo or Docker access.
@@ -29,7 +29,7 @@ the exact pinned GitHub source and tests, then builds a SHA-256-verified offline
 wheelhouse. The second uses protected production SSH to stage the archive and
 the installation scripts under:
 
-`~/chaptera-translator-incoming/a7e50873bb90a0263876e1329db946ae485932d6/`
+`~/chaptera-translator-incoming/b4f81f6e2598d422ad06b7db91e5b805dd008c86/`
 
 The stage job also installs the verified wheelhouse into a **temporary** user-owned
 virtual environment on the VPS, then executes `html_v0` and `atoms_v1` mock
@@ -105,7 +105,7 @@ would allow replacement between review and execution. Example for the
 different):
 
 ```bash
-STAGED=/home/chaptera-deploy/chaptera-translator-incoming/a7e50873bb90a0263876e1329db946ae485932d6
+STAGED=/home/chaptera-deploy/chaptera-translator-incoming/b4f81f6e2598d422ad06b7db91e5b805dd008c86
 sudo install -d -o root -g root -m 0700 /root/chaptera-translator-bootstrap
 sudo install -o root -g root -m 0700 "$STAGED/bootstrap-host.sh" /root/chaptera-translator-bootstrap/
 sudo install -o root -g root -m 0644 "$STAGED/chaptera-translator-api.service" /root/chaptera-translator-bootstrap/
@@ -137,6 +137,22 @@ This is only a local cryptographic round-trip on the actual VPS. It does
 not create encrypted offsite backups, configure S3/Drive, install services,
 or restore production data. See the [ReadEra recovery guide](https://github.com/Lalalalendia/ararra/blob/main/docs/RE08_SQLITE_RECOVERY.md)
 and [acceptance issue #56](https://github.com/Lalalalendia/ararra/issues/56).
+
+### RE-08 S3 offsite transport in disposable staging
+
+The pinned Ararra wheel includes the **optional** `offsite-s3` dependency,
+packaged in the offline wheelhouse for operator-side use. On rootless VPS
+staging, boto3's S3 service model must expose `IfNoneMatch` for PUT and
+multipart Complete. The stage then exercises encrypted upload/readback and
+download/unseal against an **in-memory fake S3**, not a real bucket.
+The ephemeral AES key, temporary SQLite and fake data are removed after
+the smoke run. No production S3 credentials or cloud network requests exist
+in this test.
+
+Passing this check does NOT mean a real off-host copy exists. The bucket,
+credentials, versioning/retention, key escrow, scheduled backup and
+independent-host recovery still require an approved operator workflow:
+[ararra #56](https://github.com/Lalalalendia/ararra/issues/56).
 
 The rootless VPS staged test additionally validates
 `chaptera_server.ops_backup` against a disposable SQLite database: online
