@@ -41,7 +41,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 16
     env:
-      ARARRA_SHA: a757768713a76424cc3573b4434c52d47c923426
+      ARARRA_SHA: a7e50873bb90a0263876e1329db946ae485932d6
     steps:
       - uses: actions/checkout@v4
         with:
@@ -49,7 +49,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: Lalalalendia/ararra
-          ref: a757768713a76424cc3573b4434c52d47c923426
+          ref: a7e50873bb90a0263876e1329db946ae485932d6
           path: ararra
           persist-credentials: false
       - name: Verify exact Ararra version and protected main ancestry
@@ -62,6 +62,8 @@ jobs:
           grep -Fq 'version = "0.6.2"' ararra/pyproject.toml
           # Rootless VPS stage now depends on the RE-08 recovery module.
           test -s ararra/src/chaptera_server/ops_backup.py
+          test -s ararra/src/chaptera_server/ops_backup_crypto.py
+          grep -Fq '"cryptography>=42,<49"' ararra/pyproject.toml
           grep -Fq 'proxy_headers=False' ararra/src/chaptera_server/cli.py
           grep -Fqx 'Environment=CHAPTERA_ADMIN_MEMBER_ID=operator' deploy/translator/chaptera-translator-api.service
           grep -Fqx 'Environment=CHAPTERA_BIND=127.0.0.1' deploy/translator/chaptera-translator-api.service
@@ -127,7 +129,7 @@ jobs:
     environment: production
     timeout-minutes: 9
     env:
-      ARARRA_SHA: a757768713a76424cc3573b4434c52d47c923426
+      ARARRA_SHA: a7e50873bb90a0263876e1329db946ae485932d6
     steps:
       - uses: actions/checkout@v4
         with:
