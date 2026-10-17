@@ -123,6 +123,12 @@ start/stop/restart of the two named translator units. The units are enabled
 but contain `ConditionPathExists` guards: reboot before release installation
 skips them rather than repeatedly starting a missing executable.
 
+The rootless VPS staged test additionally validates
+`chaptera_server.ops_backup` against a disposable SQLite database: online
+snapshot, verification and isolated restore. It does NOT touch the real
+`/var/lib/chaptera-translator/jobs.sqlite3`. Genuine off-host encrypted
+backups and a witnessed recovery remain separate RE-08 acceptance gates.
+
 The worker has `MemoryHigh=160M` and `MemoryMax=240M`; API has
 `MemoryHigh=112M` and `MemoryMax=160M`. Installation refuses to start the
 permanent processes when available memory is below **320 MiB**. These are
