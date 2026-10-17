@@ -5,11 +5,21 @@ It never changes Reader binaries, Nginx, the landing, or the Reader database.
 
 ## Verified baseline
 
-- Pinned Ararra main SHA: `218bea25a77e1ae5010dff2840bffc911f152823`, wheel `0.6.2`.
+- Pinned Ararra main SHA: `73e17a9065107512a97512d931c6de16ea230c72`, wheel `0.6.2`.
 - Gemini `gemini-3.8-flash`: a real, synthetic translation on the VPS passed structural QA and SQLite persistence.
 - VPS: Python 3.12, 891 MiB RAM, approximately 354 MiB MemAvailable at last probe, existing Reader service and ~2 GiB swap.
 - SSH deploy user has no general sudo or Docker access.
 - API is bound only to `127.0.0.1:8091`. One SQLite worker only.
+- Bootstrap creates a single host administrator called `operator` in the protected
+  `team_tokens_json` credential. The API unit explicitly sets
+  `CHAPTERA_ADMIN_MEMBER_ID=operator`: without it ReadEra's administrative
+  member-management endpoints would remain inaccessible. No public
+  registration, no additional roles.
+- This pinned revision includes SQLite browser sessions and Argon2id moderator
+  passwords in addition to the existing API key protocol. A browser frontend
+  still requires a separately reviewed HTTPS/trusted-proxy ingress. **Do not
+  expose port 8091 publicly** or assume the unit file makes the UI reachable
+  outside the host.
 
 ## Step 1 — automatic, nonmutating staging
 
@@ -19,7 +29,7 @@ the exact pinned GitHub source and tests, then builds a SHA-256-verified offline
 wheelhouse. The second uses protected production SSH to stage the archive and
 the installation scripts under:
 
-`~/chaptera-translator-incoming/218bea25a77e1ae5010dff2840bffc911f152823/`
+`~/chaptera-translator-incoming/73e17a9065107512a97512d931c6de16ea230c72/`
 
 The stage job also installs the verified wheelhouse into a **temporary** user-owned
 virtual environment on the VPS, then executes `html_v0` and `atoms_v1` mock
@@ -95,7 +105,7 @@ would allow replacement between review and execution. Example for the
 different):
 
 ```bash
-STAGED=/home/chaptera-deploy/chaptera-translator-incoming/218bea25a77e1ae5010dff2840bffc911f152823
+STAGED=/home/chaptera-deploy/chaptera-translator-incoming/73e17a9065107512a97512d931c6de16ea230c72
 sudo install -d -o root -g root -m 0700 /root/chaptera-translator-bootstrap
 sudo install -o root -g root -m 0700 "$STAGED/bootstrap-host.sh" /root/chaptera-translator-bootstrap/
 sudo install -o root -g root -m 0644 "$STAGED/chaptera-translator-api.service" /root/chaptera-translator-bootstrap/
@@ -146,6 +156,9 @@ curl --noproxy '*' -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8091/v1/
 
 The worker listens to the SQLite queue and uses the verified Gemini 3.8 model.
 No automatic real Gemini request or full-book translation is started by the
-deployment. Do not expose port 8091 publicly: browser account sessions,
-per-book ACL, quotas, backups and long-chapter capacity gates are still future
-requirements. A full chapter requires a separate explicitly bounded pilot.
+deployment. Do not expose port 8091 publicly. The pinned version already has
+revocable browser sessions, closed-team Argon2id moderator passwords and
+local per-peer/member rate limiting; these do NOT imply that Nginx HTTPS,
+trusted client IP, secure backup/restore, or operator-reviewed production
+acceptance are complete. Keep the single-worker, private loopback boundary.
+A full chapter requires a separate explicitly bounded pilot.
