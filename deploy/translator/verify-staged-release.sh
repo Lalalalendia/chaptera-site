@@ -89,6 +89,41 @@ print("permanent_services_changed=no")
 print("translator_staged_062_acceptance=PASS")
 PY
 
+# Check the bundled SQLite recovery tool against disposable, NON-PRODUCTION
+# state on the actual VPS. The Reader database and translator state are untouched.
+"$work/venv/bin/python" - "$work" <<'PY'
+from pathlib import Path
+import sqlite3
+import sys
+
+from chaptera_server.api import create_app
+from chaptera_server.config import Settings
+from chaptera_server.ops_backup import snapshot, verify, restore
+from chaptera_server.storage import JobSpec, QueueStore
+
+work = Path(sys.argv[1])
+db = work / "isolated-readera.sqlite3"
+settings = Settings(db_path=db, team_tokens={"operator": "offline-test-only"},
+                    admin_member_id="operator")
+store = QueueStore(db)
+create_app(settings, store)
+job = store.create_job("operator", JobSpec(
+    chapter_id="disposable", source_html="<p>offline fixture</p>"))
+private = work / "private-snapshots"
+private.mkdir(mode=0o700)
+manifest = snapshot(db, private)
+assert verify(manifest)["schema"] == "readera.sqlite-snapshot.v1"
+recovery = work / "offline-recovery"
+recovery.mkdir(mode=0o700)
+target = restore(manifest, recovery / "isolated-recovered.sqlite3")
+with sqlite3.connect(target) as con:
+    assert con.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+    assert con.execute("SELECT id FROM jobs").fetchone()[0] == job["id"]
+print("stage_sqlite_online_snapshot=PASS")
+print("stage_sqlite_offline_restore=PASS")
+print("live_translator_database_access=no")
+PY
+
 # Stress the actual chapter from med using a local HTTP mock. It intentionally
 # produces Cyrillic placeholders, NOT a literary translation.
 [[ -s "$slot/fixture-086.txt" && -s "$slot/fixture-086.sha256" && -s "$slot/pilot-chapter-offline.py" ]] || {

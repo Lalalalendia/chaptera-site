@@ -16,6 +16,9 @@ WorkingDirectory=/var/lib/chaptera-translator
 Environment=CHAPTERA_BIND=127.0.0.1
 Environment=CHAPTERA_PORT=8091
 Environment=CHAPTERA_DB_PATH=/var/lib/chaptera-translator/jobs.sqlite3
+# Must match the bootstrap-host.sh team_tokens_json member ID.
+# Without this explicit setting no team key is assigned the admin role.
+Environment=CHAPTERA_ADMIN_MEMBER_ID=operator
 Environment=PYTHONDONTWRITEBYTECODE=1
 LoadCredential=team_tokens_json:/etc/chaptera-translator/credentials/team_tokens_json
 ExecStart=/opt/chaptera-translator/current/venv/bin/chaptera-server serve
