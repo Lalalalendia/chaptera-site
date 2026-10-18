@@ -23,6 +23,13 @@ available="$(awk '/^MemAvailable:/ { print int($2/1024) }' /proc/meminfo)"
 if [[ ! "$available" =~ ^[0-9]+$ ]] || (( available < 320 )); then
   echo 'error=insufficient_available_memory_for_persistent_services' >&2; exit 3
 fi
+# The content-addressed source archive retains verified chapters even after
+# collection jobs are deleted. Unique-body 256 MiB is not the physical DB/WAL
+# footprint. Do not activate this release on a disk without a safe margin.
+free_archive_mb="$(df -Pm /var/lib/chaptera-translator | awk 'NR==2 {print $4}')"
+if [[ ! "$free_archive_mb" =~ ^[0-9]+$ ]] || (( free_archive_mb < 1536 )); then
+  echo 'error=insufficient_disk_for_shared_source_archive' >&2; exit 3
+fi
 for name in chaptera-translator-api.service chaptera-translator-worker.service; do
   test -f "/etc/systemd/system/$name" || { echo "error=missing_$name" >&2; exit 3; }
 done

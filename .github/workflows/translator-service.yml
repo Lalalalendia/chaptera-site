@@ -47,7 +47,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 16
     env:
-      ARARRA_SHA: baca1c45b293edefe63a9d0eb69a965b77a955a8
+      ARARRA_SHA: 4b82d3e081203832849cdbca75fce3a71302e8fd
     steps:
       - uses: actions/checkout@v4
         with:
@@ -55,7 +55,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: Lalalalendia/ararra
-          ref: baca1c45b293edefe63a9d0eb69a965b77a955a8
+          ref: 4b82d3e081203832849cdbca75fce3a71302e8fd
           path: ararra
           persist-credentials: false
       - name: Verify exact Ararra version and protected main ancestry
@@ -126,6 +126,18 @@ jobs:
           # RE-02 shared originals: the real team can read verified source
           # chapters without taking over another moderator's job controls.
           test -s ararra/src/chaptera_server/source_team_reader.py
+          # RE-02: immutable shared originals, SQLite transactional retention
+          # and admin-only explicit takedown with no automatic site crawling.
+          test -s ararra/src/chaptera_server/source_original_archive.py
+          test -s ararra/src/chaptera_server/http/routers/source_archive.py
+          test -s ararra/src/chaptera_server/web_ui/static/js/source-archive-view.mjs
+          test -s ararra/tests/test_source_original_archive.py
+          grep -Fq 'app.include_router(source_archive.router)' ararra/src/chaptera_server/api.py
+          grep -Fq 'capture_before_delete' ararra/src/chaptera_server/source_job_store.py
+          grep -Fq 'CREATE TABLE IF NOT EXISTS source_original_purge_audit' ararra/src/chaptera_server/source_original_archive.py
+          grep -Fq 'admin_actor: str = Depends(require_admin)' ararra/src/chaptera_server/http/routers/source_archive.py
+          grep -Fq 'body.textContent=data.body' ararra/src/chaptera_server/web_ui/static/js/source-archive-view.mjs
+          grep -Fq 'error=insufficient_disk_for_shared_source_archive' deploy/translator/install-release.sh
           test -s ararra/src/chaptera_server/http/routers/source_team.py
           test -s ararra/src/chaptera_server/web_ui/static/js/source-shared-view.mjs
           grep -Fq 'app.include_router(source_team.router)' ararra/src/chaptera_server/api.py
@@ -242,7 +254,7 @@ jobs:
     environment: production
     timeout-minutes: 9
     env:
-      ARARRA_SHA: baca1c45b293edefe63a9d0eb69a965b77a955a8
+      ARARRA_SHA: 4b82d3e081203832849cdbca75fce3a71302e8fd
     steps:
       - uses: actions/checkout@v4
         with:
