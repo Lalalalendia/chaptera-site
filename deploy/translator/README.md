@@ -442,3 +442,42 @@ source request limiter, independent site permissions/robots acceptance,
 offsite restore and substantially more free RAM/disk. The reviewed root
 operator must authorize and start exactly one worker manually. No credentials
 for Gemini, Drive OAuth or moderator teams may be granted to the collector.
+
+### RE-09A-05 — shared root by moderator / book / source+translation (2026-10-19)
+
+The exact pinned Ararra wheel is now `cbfdb2068f3759b30cbb0bcc76b51ad2ae552910`
+([PR #82](https://github.com/Lalalalendia/ararra/pull/82)).
+One shared Google Drive library root, `CHAPTERA_DRIVE_ROOT_FOLDER_ID`,
+replaces the old two roots as the **write destination**. Nested layout:
+
+```text
+<approved shared library root>/
+  <book owner member ID>/
+    <book title [stable key]>/
+      Источники/Глава 001.txt
+      Переводы/Глава 001.txt
+```
+
+The old two configured root IDs remain available **only for read-only
+preflight and legacy duplicate detection**. They are NOT new write targets.
+Never copy/move existing edited Drive files automatically; migrations must
+preserve original Google file/folder IDs and be operator-reviewed.
+
+**Production activation is still forbidden without a chosen shared root.**
+The dedicated Drive exporter oneshot now also checks
+`ConditionPathExists=/etc/chaptera-translator/drive-export.env`, with
+`EnvironmentFile=/etc/chaptera-translator/drive-export.env`. This separate
+root-owned file MUST contain exactly the operator-approved
+`CHAPTERA_DRIVE_ROOT_FOLDER_ID=<id>` (mode 0600, owned by root). The file
+is intentionally **not created** by CI or the inert unit installer; do not
+put an invented or placeholder ID into the unit. Source/translation old
+folder IDs remain as legacy guards.
+
+The site workflow only stages and verifies the wheel and frozen unit scripts.
+`install=YES` is still manual and separately gated by Reader health/RAM,
+and even after installation the Drive timer, SQLite export policy and
+root opt-in marker are **disabled**. No OAuth credentials are regenerated,
+moved or supplied to the long-lived API/Worker. If the new shared folder is
+not accessible through the already connected Drive `drive.file` grant, give
+this ONE folder an explicit one-time Picker authorization through the
+existing OAuth client; this is not per-release reauthorization.
