@@ -122,3 +122,72 @@ If Nginx configuration fails, do not reload. If the new vhost causes errors,
 disable only `/etc/nginx/conf.d/erida-https.conf`, run `nginx -t`, then
 `systemctl reload nginx`. Never modify/remove the Reader and landing
 vhosts. Leave the private loopback API and worker running for investigation.
+
+## Gate 4 — переход с двойного входа на ОДИН ключ (RE-03)
+
+[Ararra PR #75](https://github.com/Lalalalendia/ararra/pull/75) удаляет
+все маршруты парольной авторизации и принудительную смену пароля, оставляя
+одно поле ключа в браузере. **СНАЧАЛА** дождаться зелёного CI, слияния,
+pin и разрешённой установки этой версии Ararra через защищённый
+translator-service workflow. Старый release с активными паролями
+нельзя выставлять через key-only Nginx без дополнительной защиты.
+
+Новый шаблон: [erida-https-key-only.conf.example](nginx/erida-https-key-only.conf.example).
+Он НЕ используется до ручной установки и проверки. В нём нет
+второй HTTP Basic-плашки, но есть TLS, вход через
+`POST /v1/session`, независимые ограничения Nginx по
+`$binary_remote_addr`, серверная сессия cookie+CSRF и
+`X-Forwarded-For $remote_addr` **вместо добавления пользовательского заголовка**.
+Ararra принимает forwarded IP только от доверенного localhost-посредника.
+Ранее выданные парольные сессии после установки новой версии
+недействительны. Администратор и модераторы входят только своим
+персональным ключом.
+
+### Ручная установка только после key-only Ararra
+
+Оператор проверяет новую ревизию / health / Reader, затем помещает
+конфиг key-only в root-owned staging директорию, сопоставляет с
+содержимым просмотренного GitHub файла и создаёт резерв прежнего
+конфига вне conf.d:
+
+```bash
+install -m 0600 /etc/nginx/conf.d/erida-https.conf /root/erida-https-basic.rollback.conf
+install -m 0644 /root/erida-reviewed-key-only.conf /etc/nginx/conf.d/erida-https.conf
+if nginx -t; then
+  systemctl reload nginx
+else
+  install -m 0644 /root/erida-https-basic.rollback.conf /etc/nginx/conf.d/erida-https.conf
+  nginx -t && systemctl reload nginx
+  exit 1
+fi
+```
+
+Не создавать второй действующий `server_name`/rate-limit-zone:
+**заменить** прежний `erida-https.conf`, а не добавлять рядом.
+
+### Фактическая приёмка после Nginx reload
+
+```bash
+curl -sS -o /dev/null -w 'HTTPS /app = %{http_code}\n' https://erida.chaptera.online/app
+curl -sS -o /dev/null -w 'HTTPS unauth jobs = %{http_code}\n' https://erida.chaptera.online/v1/jobs
+curl -sS -o /dev/null -w 'HTTP /app = %{http_code}\n' http://erida.chaptera.online/app
+systemctl is-active chaptera-reader.service
+systemctl is-active chaptera-translator-api.service
+systemctl is-active chaptera-translator-worker.service
+```
+
+Ожидается: HTTPS /app = 200 (видна **одна** форма ключа);
+без ключа API = 401; HTTP /app = 404; все 3 сервиса active.
+Ручной вход действительным ключом модератора должен дать role=moderator,
+кабинет /app/cabinet и нормальный logout.
+Ошибочный ключ должен отклоняться без раскрытия наличия другого участника.
+Фактическую корректность IP в SQLite throttle проверять отдельно и
+**не проводить искусственный перебор на боевых учётных записях**.
+
+При отказе немедленно восстановить только
+`/root/erida-https-basic.rollback.conf` и reload Nginx.
+Никогда не менять существующие конфиги landing/Reader.
+
+Шифрованный off-host backup и независимая репетиция восстановления всё ещё
+обязательны для общего production; этот шаг только убирает лишнюю
+человеческую авторизацию, не закрывая другие эксплуатационные барьеры.
