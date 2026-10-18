@@ -1,0 +1,78 @@
+name: Validate private Erida HTTPS ingress examples
+
+on:
+  pull_request:
+    paths:
+      - 'deploy/translator/nginx/**'
+      - 'deploy/translator/HTTPS_INGRESS.md'
+      - '.github/workflows/validate-erida-ingress.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'deploy/translator/nginx/**'
+      - 'deploy/translator/HTTPS_INGRESS.md'
+      - '.github/workflows/validate-erida-ingress.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  nginx:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Validate isolated host and default-deny boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          http=deploy/translator/nginx/erida-http-acme.conf.example
+          tls=deploy/translator/nginx/erida-https-private.conf.example
+          test -s "$http" && test -s "$tls"
+          grep -Fq 'server_name erida.chaptera.online;' "$http"
+          grep -Fq 'server_name erida.chaptera.online;' "$tls"
+          grep -Fq 'location ^~ /.well-known/acme-challenge/' "$http"
+          grep -Fq 'return 404;' "$http"
+          if grep -Fq 'proxy_pass' "$http"; then
+            echo 'error=plaintext_proxy_forbidden' >&2; exit 2
+          fi
+          grep -Fq 'auth_basic_user_file /etc/nginx/erida-pilot.htpasswd;' "$tls"
+          grep -Fq 'proxy_set_header Authorization "";' "$tls"
+          grep -Fq 'proxy_pass http://127.0.0.1:8091;' "$tls"
+          grep -Fq 'limit_req_zone $binary_remote_addr zone=erida_login:' "$tls"
+          grep -Fq 'ssl_certificate_key /etc/letsencrypt/live/erida.chaptera.online/privkey.pem;' "$tls"
+          if grep -Eq 'reader[.]chaptera[.]online|proxy_pass[[:space:]]+http://[^;]*:8080' "$http" "$tls"; then
+            echo 'error=reader_ingress_mutation_forbidden' >&2; exit 2
+          fi
+      - name: Install offline Nginx config syntax validator
+        run: |
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq nginx-core openssl
+      - name: Prove both vhosts parse with disposable local TLS certificate
+        shell: bash
+        run: |
+          set -euo pipefail
+          tmp="$(mktemp -d)"
+          trap 'rm -rf "$tmp"' EXIT
+          openssl req -x509 -newkey rsa:2048 -nodes \
+            -keyout "$tmp/privkey.pem" -out "$tmp/fullchain.pem" \
+            -days 1 -subj '/CN=erida.chaptera.online' >/dev/null 2>&1
+          sed \
+            -e "s@/etc/letsencrypt/live/erida.chaptera.online/fullchain.pem@$tmp/fullchain.pem@" \
+            -e "s@/etc/letsencrypt/live/erida.chaptera.online/privkey.pem@$tmp/privkey.pem@" \
+            deploy/translator/nginx/erida-https-private.conf.example > "$tmp/tls.conf"
+          cat > "$tmp/nginx.conf" <<EOF
+          worker_processes 1;
+          pid $tmp/nginx.pid;
+          error_log stderr notice;
+          events { worker_connections 64; }
+          http {
+              include /etc/nginx/mime.types;
+              include $GITHUB_WORKSPACE/deploy/translator/nginx/erida-http-acme.conf.example;
+              include $tmp/tls.conf;
+          }
+          EOF
+          sudo nginx -t -c "$tmp/nginx.conf"
+          echo 'erida_nginx_syntax=PASS'
