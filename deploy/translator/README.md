@@ -359,3 +359,70 @@ workflow on `main` with `install=YES`. Verify /opt/chaptera-translator/current
 points to the new pin, /healthz 200, unauthenticated /v1/jobs 401, Reader
 and worker active, and check private-browser tab title `Вход` before key login.
 No Gemini calls or Nginx modifications required.
+
+
+### RE-09A-04 — inert dedicated Drive export service (pending #81 / #79)
+
+The owner's OAuth and real end-to-end `drive-smoke --live-smoke` have already
+**PASSED directly on the VPS**. Google client ID, client secret and refresh token
+are stored root-only in `/etc/chaptera-translator/google-drive/` and must
+survive all future `/opt/chaptera-translator/current` release switches.
+**Never request repeat OAuth consent when updating ReadEra.**
+
+The new `chaptera-translator-drive-export.service` is a **standalone one-shot**
+that loads only these three secrets via `systemd LoadCredential`, runs the
+existing pinned executable with `drive-outbox --run-once --allow-drive-write`,
+and uses the permanent translation SQLite. The API and Gemini worker do not get
+Google credentials. The timer wakes every two minutes but is *not enabled* by
+the installer. Both the `drive-export-enabled` root marker and the separate
+SQLite operator policy must be opted in before real writes can begin.
+
+One-time reviewed root installation (example; adjust the staged path and use a
+frozen root-owned copy, never run arbitrary deploy-user-owned scripts as root):
+
+```bash
+STAGED=/home/chaptera-deploy/chaptera-translator-incoming/f0be7180daf3e1fd3d25417ecd14590e76eda451
+install -d -o root -g root -m 0700 /root/erida-drive-export-review
+install -o root -g root -m 0700 "$STAGED/install-drive-export-units.sh" /root/erida-drive-export-review/
+install -o root -g root -m 0644 "$STAGED/chaptera-translator-drive-export.service" /root/erida-drive-export-review/
+install -o root -g root -m 0644 "$STAGED/chaptera-translator-drive-export.timer" /root/erida-drive-export-review/
+# Review the frozen /root/ copy, including unit ExecStart, folder IDs and credentials paths.
+bash /root/erida-drive-export-review/install-drive-export-units.sh
+```
+
+Installer checks the existing root-owned OAuth credentials' **metadata only**
+(mode 0700 directory, 0600 each file), refuses unexpected symlinks and changed
+existing units, installs units and performs `systemctl daemon-reload`; it **does
+not** enable or start anything, touch Google files, restart Reader/API/Worker or
+print secret bytes. The previously installed pinned CLI will reject the new
+`drive-outbox` command until PR #81 is merged, a new release is staged and
+installed by the separate `install=YES` workflow. Do not activate early.
+
+Future activation requires explicit operator verification: review a real
+completed chapter first with `export-drive --job-id <id> --dry-run` (no network)
+and separate authorized first remote write, then use
+`chaptera-server drive-outbox --enable` as the normal translator service
+user against the production SQLite; only after all those gates, root creates
+the `/etc/chaptera-translator/drive-export-enabled` marker and enables the
+timer with `systemctl enable --now chaptera-translator-drive-export.timer`.
+Rollback: disable the timer and remove the marker; then disable the SQLite
+policy. **No OAuth revocation, secret rotation, or service restart** is needed.
+Failed or uncertain uploads remain in HOLD until reviewed for reconciliation.
+
+Reference: [ararra #79](https://github.com/Lalalalendia/ararra/issues/79),
+[draft ararra PR #81](https://github.com/Lalalalendia/ararra/pull/81).
+
+### RE-09A-04 exact pin — 2026-10-18
+
+This workflow now pins the merged `ararra@f0be7180daf3e1fd3d25417ecd14590e76eda451` ([PR #81](https://github.com/Lalalalendia/ararra/pull/81)):
+the durable **opt-in** Google Drive outbox and one-shot CLI. On rootless
+VPS staging, the exact wheel performs a self-contained SQLite outbox proof
+without Google OAuth, Google network calls, or real production data.
+
+`chaptera-translator-drive-export.service`, its timer and a root-only reviewed
+installer are copied into the deploy user's incoming staging folder for review;
+**none is installed or activated** by the GitHub Actions pipeline. Permanent
+VPS Google OAuth credentials in `/etc/chaptera-translator/google-drive/` are
+unchanged and survive release changes. Actual export remains OFF until a
+separately authorized real completed-job pilot, opt-in policy, reviewed
+root marker and timer enablement.

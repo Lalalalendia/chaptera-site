@@ -89,6 +89,54 @@ print("permanent_services_changed=no")
 print("translator_staged_062_acceptance=PASS")
 PY
 
+# RE-09A-04: exercise the actual PINNED wheel's outbox, offline and isolated.
+"$work/venv/bin/python" - "$work" <<'PY'
+from pathlib import Path
+import sys
+from chaptera_server.drive_outbox import DriveOutbox
+from chaptera_server.library import BookLibrary
+from chaptera_server.storage import QueueStore
+db = QueueStore(Path(sys.argv[1]) / "disposable-drive-outbox.sqlite3")
+outbox = DriveOutbox(db)
+assert outbox.status() == {
+    "enabled": False, "pending": 0, "running": 0, "done": 0, "hold": 0,
+}
+lib = BookLibrary(db)
+lib.create_book("book-1", "Offline stage only",
+                owner_member_id="operator", actor_id="operator")
+chapter = lib.put_chapter(
+    "book-1", "chapter-1", chapter_index=1, chapter_path="chapters/1.xhtml",
+    source_html="<p>offline source</p>", expected_revision=0,
+)
+def complete():
+    spec = lib.new_job(
+        "book-1", "chapter-1", source_language="en", target_language="Russian",
+        style_instructions="", max_attempts=1,
+    )
+    job = db.create_job("operator", spec)
+    running = db.claim_next()
+    assert running and running[0]["id"] == job["id"]
+    assert db.complete(job["id"], running[1], "<p>offline translation</p>",
+                       chapter["source_hash"], 1)
+    return job["id"]
+complete()
+assert outbox.status()["pending"] == 0  # no historical backfill
+outbox.set_enabled(True)
+jid = complete()
+assert outbox.status()["pending"] == 1
+claim = outbox.claim_next()
+assert claim and claim[0] == jid
+assert outbox.hold(jid, claim[1], error_code="offline_test_only")
+assert outbox.status()["hold"] == 1
+assert outbox.retry_held(jid)
+assert outbox.status()["pending"] == 1
+outbox.set_enabled(False)
+assert not outbox.status()["enabled"]
+print("stage_drive_outbox_durable_sqlite=PASS")
+print("stage_drive_network_calls=0")
+print("production_drive_credentials_read=no")
+PY
+
 # Check the bundled SQLite recovery tool against disposable, NON-PRODUCTION
 # state on the actual VPS. The Reader database and translator state are untouched.
 "$work/venv/bin/python" - "$work" <<'PY'
