@@ -409,3 +409,18 @@ Failed or uncertain uploads remain in HOLD until reviewed for reconciliation.
 
 Reference: [ararra #79](https://github.com/Lalalalendia/ararra/issues/79),
 [draft ararra PR #81](https://github.com/Lalalalendia/ararra/pull/81).
+
+### RE-09A-04 exact pin — 2026-10-18
+
+This workflow now pins the merged `ararra@f0be7180daf3e1fd3d25417ecd14590e76eda451` ([PR #81](https://github.com/Lalalalendia/ararra/pull/81)):
+the durable **opt-in** Google Drive outbox and one-shot CLI. On rootless
+VPS staging, the exact wheel performs a self-contained SQLite outbox proof
+without Google OAuth, Google network calls, or real production data.
+
+`chaptera-translator-drive-export.service`, its timer and a root-only reviewed
+installer are copied into the deploy user's incoming staging folder for review;
+**none is installed or activated** by the GitHub Actions pipeline. Permanent
+VPS Google OAuth credentials in `/etc/chaptera-translator/google-drive/` are
+unchanged and survive release changes. Actual export remains OFF until a
+separately authorized real completed-job pilot, opt-in policy, reviewed
+root marker and timer enablement.
