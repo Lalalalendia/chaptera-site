@@ -21,6 +21,7 @@ Environment=CHAPTERA_DB_PATH=/var/lib/chaptera-translator/jobs.sqlite3
 Environment=CHAPTERA_ADMIN_MEMBER_ID=operator
 Environment=PYTHONDONTWRITEBYTECODE=1
 LoadCredential=team_tokens_json:/etc/chaptera-translator/credentials/team_tokens_json
+LoadCredential=gemini_vault_key:/etc/chaptera-translator/credentials/gemini_vault_key
 ExecStart=/opt/chaptera-translator/current/venv/bin/chaptera-server serve
 Restart=on-failure
 RestartSec=8s

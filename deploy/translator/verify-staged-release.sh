@@ -199,6 +199,71 @@ print("stage_sqlite_encrypted_tamper_rejected=PASS")
 print("live_translator_database_access=no")
 PY
 
+# Disposable, no-Gemini-network acceptance of the personal project vault.
+"$work/venv/bin/python" - "$work" <<'PY'
+import asyncio
+import base64
+import sqlite3
+import sys
+from pathlib import Path
+
+from chaptera_server.api import create_app
+from chaptera_server.config import Settings
+from chaptera_server.member_gemini_provider import MemberGeminiProviders
+from chaptera_server.personal_gemini_keys import PersonalGeminiKeys
+from chaptera_server.storage import JobSpec, QueueStore
+from chaptera_server.worker import TranslationWorker
+import chaptera_server.member_gemini_provider as member_provider
+
+work = Path(sys.argv[1])
+master = base64.b64encode(bytes([2]) * 32).decode("ascii")
+personal_db = work / "temporary-personal-keys.sqlite3"
+config = Settings(
+    db_path=personal_db, team_tokens={"moda": "test-only-token-a", "modb": "test-only-token-b"},
+    gemini_vault_key=master, gemini_rpm=0, gemini_tpm=0,
+    gemini_reserved_output_tokens=0,
+)
+store = QueueStore(config.db_path)
+create_app(config, store)
+vault = PersonalGeminiKeys(store, master)
+a_key = "AIzaTEST_aaaaaaaaaaaaaaaaaaaaaaaaaa"
+b_key = "AIzaTEST_bbbbbbbbbbbbbbbbbbbbbbbbbb"
+vault.put("moda", "project-mod-a01", a_key)
+vault.put("modb", "project-mod-b01", b_key)
+with sqlite3.connect(personal_db) as database:
+    assert a_key.encode() not in personal_db.read_bytes()
+    assert b_key.encode() not in personal_db.read_bytes()
+assert len(vault.list_for("moda")["projects"]) == 1
+assert len(vault.list_for("modb")["projects"]) == 1
+used = []
+class FakeGemini:
+    def __init__(self, api_key, model, **kwargs):
+        self.api_key, self.model, self.completed_calls = api_key, model, 0
+    async def generate(self, request):
+        used.append(self.api_key)
+        self.completed_calls += 1
+        return request.source_html_with_markers.replace("世界正在燃烧。", "Мир горит.")
+member_provider.GeminiProvider = FakeGemini
+for i in range(2):
+    store.create_job("moda", JobSpec(f"a-{i}", "<body><p>世界正在燃烧。</p></body>"))
+store.create_job("modb", JobSpec("b-0", "<body><p>世界正在燃烧。</p></body>"))
+async def trial():
+    worker = TranslationWorker(store, MemberGeminiProviders(store, config, vault))
+    assert await worker.run_once()
+    assert await worker.run_once()
+    assert await worker.run_once()
+    assert not await worker.run_once()
+asyncio.run(trial())
+assert used == [b_key, a_key, a_key]
+assert all(job["status"] == "completed" for job in store.list_jobs())
+vault.delete("modb", "project-mod-b01")
+assert vault.choices("modb") == []
+print("stage_personal_gemini_encrypted_vault=PASS")
+print("stage_personal_gemini_actor_dispatch=PASS")
+print("stage_personal_gemini_revocation=PASS")
+print("real_gemini_calls=0")
+PY
+
 # Stress the actual chapter from med using a local HTTP mock. It intentionally
 # produces Cyrillic placeholders, NOT a literary translation.
 [[ -s "$slot/fixture-086.txt" && -s "$slot/fixture-086.sha256" && -s "$slot/pilot-chapter-offline.py" ]] || {

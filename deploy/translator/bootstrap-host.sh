@@ -37,6 +37,24 @@ PY
   chown "$deploy_user:$runtime_group" "$token_file"
 fi
 chmod 0600 "$token_file"
+# One stable root-bootstrap-created vault shared by API and worker.
+# Never overwrite this file: previous ciphertext requires the same master.
+vault_file=/etc/chaptera-translator/credentials/gemini_vault_key
+if [[ ! -e "$vault_file" ]]; then
+  python3 - "$vault_file" <<'PY'
+import base64, os, secrets, sys
+fd = os.open(sys.argv[1], os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+with os.fdopen(fd, 'w', encoding='ascii') as out:
+    out.write(base64.b64encode(secrets.token_bytes(32)).decode('ascii') + '\n')
+    out.flush()
+    os.fsync(out.fileno())
+PY
+  chown "$deploy_user:$runtime_group" "$vault_file"
+fi
+if [[ ! -f "$vault_file" || -L "$vault_file" ]]; then
+  echo 'error=unsafe_gemini_vault_key' >&2; exit 2
+fi
+chmod 0600 "$vault_file"
 install -m 0644 -o root -g root "$source_dir/chaptera-translator-api.service" /etc/systemd/system/chaptera-translator-api.service
 install -m 0644 -o root -g root "$source_dir/chaptera-translator-worker.service" /etc/systemd/system/chaptera-translator-worker.service
 systemctl_path="$(command -v systemctl)"

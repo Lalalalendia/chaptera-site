@@ -199,3 +199,24 @@ local per-peer/member rate limiting; these do NOT imply that Nginx HTTPS,
 trusted client IP, secure backup/restore, or operator-reviewed production
 acceptance are complete. Keep the single-worker, private loopback boundary.
 A full chapter requires a separate explicitly bounded pilot.
+
+
+### RE-06: Gemini-ключи модераторов через личный кабинет
+
+Однократный **утверждённый root bootstrap** генерирует отдельно от SQLite
+случайный 32-байтный `gemini_vault_key` (base64) в owner-only файле.
+Системные API и worker получают его через `LoadCredential`; он стабилен
+между выпусками и не выводится в stdout/GitHub. При утрате master key
+модераторские ключи в SQLite не расшифровать. Никогда не ротировать master
+автоматически.
+
+Личный кабинет `/app/cabinet` добавляет, заменяет и удаляет ключи
+собственных Google-проектов (правило **1 проект = 1 ключ**). API хранит
+AES-256-GCM ciphertext, а worker использует только ключ владельца главы;
+участники без ключа ожидают в SQLite без платных попыток.
+Существующий host `gemini_api_key` оставлен для возможного отката на
+прошлый выпуск, персональный worker его не использует.
+
+Не включать Nginx/public API и не делать платный пилот автоматически.
+Блокер root bootstrap [#46](https://github.com/Lalalalendia/chaptera-site/issues/46)
+остаётся до фактического санкционированного выполнения.
