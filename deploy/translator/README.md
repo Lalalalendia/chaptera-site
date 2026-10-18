@@ -229,3 +229,20 @@ The automated push workflow always stages **without** installing.
 The staged release pin was updated to the exact merged `ararra@a8b7994d078bdd1b47442202f13688e5d8cb0ce8` (`RE-06C` batch selection/queue plus `RE-09A` manual Drive export/OAuth). The workflow guards require those modules in the *pinned wheel source*, not merely in the latest upstream main. This is a stage/CI update only; it does not alter the permanent VPS services.
 
 Before an operator performs the one-time reviewed root-owned bootstrap, verify the preflight and the exact-head two-job `translator-service` CI (build plus rootless VPS stage). Bootstrap copies must remain root-owned and immutable to the SSH deploy principal. Subsequent `install=YES` is separately approved and must pass the existing Reader/memory/loopback gates. Do not assume package/CI success proves an installed service. Personal moderator Gemini keys remain required; no paid Gemini calls and no public Nginx/HTTPS exposure are authorized by this pin.
+
+## Step 4 — separately approved private HTTPS browser pilot
+
+After confirming the installed API stays on loopback, Reader is stable and
+the operator has approved a new DNS record, use the isolated
+[Erida private HTTPS ingress guide](HTTPS_INGRESS.md) and the two reviewed
+`nginx/erida-*.conf.example` files. They create a separate
+`erida.chaptera.online` vhost protected by TLS, unique bcrypt HTTP Basic
+Auth and Nginx edge limits. The plaintext vhost serves **ACME only**, not
+the translator; no existing landing/Reader vhost may be changed.
+
+This remains a **restricted operator pilot**, not public/team production:
+Ararra's internal login throttle still sees the Nginx peer, and a real
+client-IP trusted-proxy boundary, off-host encrypted backup/restore and browser
+acceptance are outstanding. Do not open port 8091 or remove the pilot perimeter
+until the separate gates pass. The CI syntax validator never contacts the
+production VPS and cannot enable the ingress by itself.
