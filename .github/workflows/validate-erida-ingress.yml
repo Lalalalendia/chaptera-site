@@ -30,20 +30,30 @@ jobs:
           set -euo pipefail
           http=deploy/translator/nginx/erida-http-acme.conf.example
           tls=deploy/translator/nginx/erida-https-private.conf.example
-          test -s "$http" && test -s "$tls"
+          keyonly=deploy/translator/nginx/erida-https-key-only.conf.example
+          test -s "$http" && test -s "$tls" && test -s "$keyonly"
           grep -Fq 'server_name erida.chaptera.online;' "$http"
           grep -Fq 'server_name erida.chaptera.online;' "$tls"
+          grep -Fq 'server_name erida.chaptera.online;' "$keyonly"
           grep -Fq 'location ^~ /.well-known/acme-challenge/' "$http"
           grep -Fq 'return 404;' "$http"
           if grep -Fq 'proxy_pass' "$http"; then
             echo 'error=plaintext_proxy_forbidden' >&2; exit 2
           fi
           grep -Fq 'auth_basic_user_file /etc/nginx/erida-pilot.htpasswd;' "$tls"
+          if grep -Eq '^[[:space:]]*auth_basic(_user_file)?[[:space:]]' "$keyonly"; then
+            echo 'error=key_only_requires_one_login' >&2; exit 2
+          fi
+          grep -Fq 'proxy_set_header X-Forwarded-For $remote_addr;' "$keyonly"
+          grep -Fq 'proxy_set_header X-Real-IP $remote_addr;' "$keyonly"
+          grep -Fq 'limit_req zone=erida_login burst=6 nodelay;' "$keyonly"
+          grep -Fq 'location = /v1/session/password {' "$keyonly"
+          grep -Fq 'return 404;' "$keyonly"
           grep -Fq 'proxy_set_header Authorization "";' "$tls"
           grep -Fq 'proxy_pass http://127.0.0.1:8091;' "$tls"
           grep -Fq 'limit_req_zone $binary_remote_addr zone=erida_login:' "$tls"
           grep -Fq 'ssl_certificate_key /etc/letsencrypt/live/erida.chaptera.online/privkey.pem;' "$tls"
-          if grep -Eq 'reader[.]chaptera[.]online|proxy_pass[[:space:]]+http://[^;]*:8080' "$http" "$tls"; then
+          if grep -Eq 'reader[.]chaptera[.]online|proxy_pass[[:space:]]+http://[^;]*:8080' "$http" "$tls" "$keyonly"; then
             echo 'error=reader_ingress_mutation_forbidden' >&2; exit 2
           fi
       - name: Install offline Nginx config syntax validator
@@ -76,3 +86,23 @@ jobs:
           EOF
           sudo nginx -t -c "$tmp/nginx.conf"
           echo 'erida_nginx_syntax=PASS'
+
+          # Verify both variants individually; they are mutually exclusive
+          # because they declare the same server_name and limiter zones.
+          sed \
+            -e "s@/etc/letsencrypt/live/erida.chaptera.online/fullchain.pem@$tmp/fullchain.pem@" \
+            -e "s@/etc/letsencrypt/live/erida.chaptera.online/privkey.pem@$tmp/privkey.pem@" \
+            deploy/translator/nginx/erida-https-key-only.conf.example > "$tmp/keyonly.conf"
+          cat > "$tmp/nginx-keyonly.conf" <<EOF
+          worker_processes 1;
+          pid $tmp/nginx-keyonly.pid;
+          error_log stderr notice;
+          events { worker_connections 64; }
+          http {
+              include /etc/nginx/mime.types;
+              include $GITHUB_WORKSPACE/deploy/translator/nginx/erida-http-acme.conf.example;
+              include $tmp/keyonly.conf;
+          }
+          EOF
+          sudo nginx -t -c "$tmp/nginx-keyonly.conf"
+          echo 'erida_key_only_nginx_syntax=PASS'
