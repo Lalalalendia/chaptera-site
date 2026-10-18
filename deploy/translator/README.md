@@ -481,3 +481,38 @@ moved or supplied to the long-lived API/Worker. If the new shared folder is
 not accessible through the already connected Drive `drive.file` grant, give
 this ONE folder an explicit one-time Picker authorization through the
 existing OAuth client; this is not per-release reauthorization.
+
+### RE-02 — verified originals readable by every team member (2026-10-19)
+
+Pinned application release: `ararra@baca1c45b293edefe63a9d0eb69a965b77a955a8`
+([PR #87](https://github.com/Lalalalendia/ararra/pull/87)).
+Previously recorded pins in this document are historical.
+
+- Confirmed in Python 3.11/3.12 and real Chromium: all authenticated
+  moderators and admins can read previously saved, hash-verified original
+  source chapters using the isolated `/v1/source-books/shared` GET router.
+  Existing accepted translations and imported originals in `BookLibrary`
+  were already team-readable. The source job creator is recorded in
+  `collector_member_id`; it is **not** a per-book ACL or `owner_member_id`.
+- Team-facing browser reader is collapsed until opened, renders external
+  text with `textContent` (never injected HTML), clears on logout, and
+  exposes no foreign delete/retry/cancel/import stage controls. Unverified
+  chapters return no prose. Complete manuscript TXT still requires exact
+  manifest + SHA-256 preview matching before downloading.
+- Existing personal source job management and daily/private Gemini usage,
+  credentials, import stages and Google Drive ownership remain unchanged.
+- `chaptera-translator-source-worker.service` is intentionally **not**
+  installed/enabled/started by this release. **No bulk site scraping**
+  without site-usage permission, live acceptance, physical RAM/disk headroom
+  and a tested off-host backup/restore. See Ararra issues
+  [#65](https://github.com/Lalalalendia/ararra/issues/65) and
+  [#83](https://github.com/Lalalalendia/ararra/issues/83).
+
+CI workflow builds and performs transient, offline, rootless VPS staging only;
+it does NOT change running services unless a root operator later launches
+`translator-service.yml` from main with `install=YES` after Reader is
+confirmed active and `MemAvailable >= 320 MiB`.
+On an accepted manual activation verify the `/opt/chaptera-translator/current`
+symlink points to exact Ararra SHA above; source-team GET without a team
+session returns HTTP 401, `/healthz` returns 200 and Reader/API/translation
+worker remain active. `source-worker` must stay disabled.

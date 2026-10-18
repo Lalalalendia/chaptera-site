@@ -47,7 +47,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 16
     env:
-      ARARRA_SHA: cbfdb2068f3759b30cbb0bcc76b51ad2ae552910
+      ARARRA_SHA: baca1c45b293edefe63a9d0eb69a965b77a955a8
     steps:
       - uses: actions/checkout@v4
         with:
@@ -55,7 +55,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: Lalalalendia/ararra
-          ref: cbfdb2068f3759b30cbb0bcc76b51ad2ae552910
+          ref: baca1c45b293edefe63a9d0eb69a965b77a955a8
           path: ararra
           persist-credentials: false
       - name: Verify exact Ararra version and protected main ancestry
@@ -123,6 +123,22 @@ jobs:
           grep -Fq 'id="source-job-history" class="source-job-history"' ararra/src/chaptera_server/web_ui/templates/shell.html
           grep -Fq '.topbar-logout {' ararra/src/chaptera_server/web_ui/static/css/readera.css
           grep -Fq '#source-job-history {' ararra/src/chaptera_server/web_ui/static/css/readera.css
+          # RE-02 shared originals: the real team can read verified source
+          # chapters without taking over another moderator's job controls.
+          test -s ararra/src/chaptera_server/source_team_reader.py
+          test -s ararra/src/chaptera_server/http/routers/source_team.py
+          test -s ararra/src/chaptera_server/web_ui/static/js/source-shared-view.mjs
+          grep -Fq 'app.include_router(source_team.router)' ararra/src/chaptera_server/api.py
+          grep -Fq 'router = APIRouter(prefix="/v1/source-books/shared"' ararra/src/chaptera_server/http/routers/source_team.py
+          grep -Fq 'dependencies=[Depends(require_member)]' ararra/src/chaptera_server/http/routers/source_team.py
+          grep -Fq 'team_read=True' ararra/src/chaptera_server/http/routers/source_team.py
+          grep -Fq 'id="source-shared" class="source-shared"' ararra/src/chaptera_server/web_ui/templates/shell.html
+          grep -Fq 'body.textContent=chapter.body' ararra/src/chaptera_server/web_ui/static/js/source-shared-view.mjs
+          grep -Fq 'def test_team_can_read_single_verified_chapter_but_not_manage_other_jobs' ararra/tests/test_source_team_reads.py
+          # Do not enable the optional source-worker in the normal rollout.
+          if grep -Eq 'source-worker.service|source-collection-enabled' deploy/translator/install-release.sh; then
+            echo 'error=source_worker_activation_forbidden' >&2; exit 2
+          fi
           if grep -Fq 'class="workspace-actions"' ararra/src/chaptera_server/web_ui/templates/shell.html; then
             echo 'error=detached_logout_row_forbidden' >&2; exit 2
           fi
@@ -226,7 +242,7 @@ jobs:
     environment: production
     timeout-minutes: 9
     env:
-      ARARRA_SHA: cbfdb2068f3759b30cbb0bcc76b51ad2ae552910
+      ARARRA_SHA: baca1c45b293edefe63a9d0eb69a965b77a955a8
     steps:
       - uses: actions/checkout@v4
         with:
