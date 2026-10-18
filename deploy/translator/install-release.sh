@@ -10,7 +10,7 @@ credentials=/etc/chaptera-translator/credentials
 if [[ ! -f /etc/chaptera-translator/.bootstrapped || ! -d "$root/releases" ]]; then
   echo 'error=one_time_root_bootstrap_required' >&2; exit 2
 fi
-for name in team_tokens_json gemini_api_key; do
+for name in team_tokens_json gemini_api_key gemini_vault_key; do
   if [[ ! -s "$credentials/$name" ]]; then
     echo "error=missing_protected_credential_$name" >&2; exit 2
   fi

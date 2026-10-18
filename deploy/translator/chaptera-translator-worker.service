@@ -18,6 +18,7 @@ Environment=CHAPTERA_GEMINI_MODEL=gemini-3.8-flash
 Environment=CHAPTERA_WORKER_POLL_SECONDS=2.0
 Environment=PYTHONDONTWRITEBYTECODE=1
 LoadCredential=gemini_api_key:/etc/chaptera-translator/credentials/gemini_api_key
+LoadCredential=gemini_vault_key:/etc/chaptera-translator/credentials/gemini_vault_key
 ExecStart=/opt/chaptera-translator/current/venv/bin/chaptera-server worker
 Restart=on-failure
 RestartSec=10s

@@ -68,6 +68,9 @@ jobs:
           grep -Fq '"cryptography>=42,<49"' ararra/pyproject.toml
           grep -Fq 'proxy_headers=False' ararra/src/chaptera_server/cli.py
           grep -Fqx 'Environment=CHAPTERA_ADMIN_MEMBER_ID=operator' deploy/translator/chaptera-translator-api.service
+          grep -Fqx 'LoadCredential=gemini_vault_key:/etc/chaptera-translator/credentials/gemini_vault_key' deploy/translator/chaptera-translator-api.service
+          grep -Fqx 'LoadCredential=gemini_vault_key:/etc/chaptera-translator/credentials/gemini_vault_key' deploy/translator/chaptera-translator-worker.service
+          grep -Fq 'secrets.token_bytes(32)' deploy/translator/bootstrap-host.sh
           grep -Fqx 'Environment=CHAPTERA_BIND=127.0.0.1' deploy/translator/chaptera-translator-api.service
           grep -Fqx 'Environment=CHAPTERA_PORT=8091' deploy/translator/chaptera-translator-api.service
           bash -n deploy/translator/bootstrap-host.sh
@@ -144,6 +147,9 @@ jobs:
           set -euo pipefail
           sha256sum -c translator-wheelhouse.sha256
           grep -Fqx 'Environment=CHAPTERA_ADMIN_MEMBER_ID=operator' deploy/translator/chaptera-translator-api.service
+          grep -Fqx 'LoadCredential=gemini_vault_key:/etc/chaptera-translator/credentials/gemini_vault_key' deploy/translator/chaptera-translator-api.service
+          grep -Fqx 'LoadCredential=gemini_vault_key:/etc/chaptera-translator/credentials/gemini_vault_key' deploy/translator/chaptera-translator-worker.service
+          grep -Fq 'secrets.token_bytes(32)' deploy/translator/bootstrap-host.sh
           grep -Fqx 'Environment=CHAPTERA_BIND=127.0.0.1' deploy/translator/chaptera-translator-api.service
           grep -Fqx 'Environment=CHAPTERA_PORT=8091' deploy/translator/chaptera-translator-api.service
           bash -n deploy/translator/bootstrap-host.sh
