@@ -77,10 +77,18 @@ jobs:
           grep -Fqx 'Environment=CHAPTERA_ADMIN_MEMBER_ID=operator' deploy/translator/chaptera-translator-api.service
           grep -Fqx 'LoadCredential=gemini_vault_key:/etc/chaptera-translator/credentials/gemini_vault_key' deploy/translator/chaptera-translator-api.service
           grep -Fqx 'LoadCredential=gemini_vault_key:/etc/chaptera-translator/credentials/gemini_vault_key' deploy/translator/chaptera-translator-worker.service
-          # One project = one moderator-owned key; no global Gemini credential.
-          ! grep -Fq 'LoadCredential=gemini_api_key:' deploy/translator/chaptera-translator-worker.service
-          ! grep -Fq 'gemini_api_key' deploy/translator/install-release.sh
-          ! grep -Fq 'TRANSLATOR_GEMINI_API_KEY' .github/workflows/translator-service.yml
+          # Explicit rejection, never negated grep under set -e (bash ignores
+          # errexit inside ! commands). Match actual CI secret references,
+          # not the validation expression itself.
+          if grep -Fq 'LoadCredential=gemini_api_key:' deploy/translator/chaptera-translator-worker.service; then
+            echo 'error=legacy_worker_key_forbidden' >&2; exit 2
+          fi
+          if grep -Fq 'gemini_api_key' deploy/translator/install-release.sh; then
+            echo 'error=legacy_installer_key_forbidden' >&2; exit 2
+          fi
+          if grep -Eq 'secrets[.]TRANSLATOR_GEMINI_API_KEY' .github/workflows/translator-service.yml; then
+            echo 'error=legacy_secret_reference_forbidden' >&2; exit 2
+          fi
           grep -Fq 'secrets.token_bytes(32)' deploy/translator/bootstrap-host.sh
           grep -Fqx 'Environment=CHAPTERA_BIND=127.0.0.1' deploy/translator/chaptera-translator-api.service
           grep -Fqx 'Environment=CHAPTERA_PORT=8091' deploy/translator/chaptera-translator-api.service
@@ -160,10 +168,18 @@ jobs:
           grep -Fqx 'Environment=CHAPTERA_ADMIN_MEMBER_ID=operator' deploy/translator/chaptera-translator-api.service
           grep -Fqx 'LoadCredential=gemini_vault_key:/etc/chaptera-translator/credentials/gemini_vault_key' deploy/translator/chaptera-translator-api.service
           grep -Fqx 'LoadCredential=gemini_vault_key:/etc/chaptera-translator/credentials/gemini_vault_key' deploy/translator/chaptera-translator-worker.service
-          # One project = one moderator-owned key; no global Gemini credential.
-          ! grep -Fq 'LoadCredential=gemini_api_key:' deploy/translator/chaptera-translator-worker.service
-          ! grep -Fq 'gemini_api_key' deploy/translator/install-release.sh
-          ! grep -Fq 'TRANSLATOR_GEMINI_API_KEY' .github/workflows/translator-service.yml
+          # Explicit rejection, never negated grep under set -e (bash ignores
+          # errexit inside ! commands). Match actual CI secret references,
+          # not the validation expression itself.
+          if grep -Fq 'LoadCredential=gemini_api_key:' deploy/translator/chaptera-translator-worker.service; then
+            echo 'error=legacy_worker_key_forbidden' >&2; exit 2
+          fi
+          if grep -Fq 'gemini_api_key' deploy/translator/install-release.sh; then
+            echo 'error=legacy_installer_key_forbidden' >&2; exit 2
+          fi
+          if grep -Eq 'secrets[.]TRANSLATOR_GEMINI_API_KEY' .github/workflows/translator-service.yml; then
+            echo 'error=legacy_secret_reference_forbidden' >&2; exit 2
+          fi
           grep -Fq 'secrets.token_bytes(32)' deploy/translator/bootstrap-host.sh
           grep -Fqx 'Environment=CHAPTERA_BIND=127.0.0.1' deploy/translator/chaptera-translator-api.service
           grep -Fqx 'Environment=CHAPTERA_PORT=8091' deploy/translator/chaptera-translator-api.service
