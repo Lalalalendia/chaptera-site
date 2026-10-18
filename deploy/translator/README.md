@@ -5,7 +5,7 @@ It never changes Reader binaries, Nginx, the landing, or the Reader database.
 
 ## Verified baseline
 
-- Pinned Ararra main SHA: `a8b7994d078bdd1b47442202f13688e5d8cb0ce8`, wheel `0.6.2`.
+- Pinned Ararra main SHA: `26bb92b7c383a22de67b0c1c40535fe5f19c450f`, wheel `0.6.2`.
 - Gemini `gemini-3.8-flash`: a real, synthetic translation on the VPS passed structural QA and SQLite persistence.
 - VPS: Python 3.12, 891 MiB RAM, approximately 354 MiB MemAvailable at last probe, existing Reader service and ~2 GiB swap.
 - SSH deploy user has no general sudo or Docker access.
@@ -29,7 +29,7 @@ the exact pinned GitHub source and tests, then builds a SHA-256-verified offline
 wheelhouse. The second uses protected production SSH to stage the archive and
 the installation scripts under:
 
-`~/chaptera-translator-incoming/a8b7994d078bdd1b47442202f13688e5d8cb0ce8/`
+`~/chaptera-translator-incoming/26bb92b7c383a22de67b0c1c40535fe5f19c450f/`
 
 The stage job also installs the verified wheelhouse into a **temporary** user-owned
 virtual environment on the VPS, then executes `html_v0` and `atoms_v1` mock
@@ -88,7 +88,7 @@ would allow replacement between review and execution. Example for the
 different):
 
 ```bash
-STAGED=/home/chaptera-deploy/chaptera-translator-incoming/a8b7994d078bdd1b47442202f13688e5d8cb0ce8
+STAGED=/home/chaptera-deploy/chaptera-translator-incoming/26bb92b7c383a22de67b0c1c40535fe5f19c450f
 sudo install -d -o root -g root -m 0700 /root/chaptera-translator-bootstrap
 sudo install -o root -g root -m 0700 "$STAGED/bootstrap-host.sh" /root/chaptera-translator-bootstrap/
 sudo install -o root -g root -m 0644 "$STAGED/chaptera-translator-api.service" /root/chaptera-translator-bootstrap/
@@ -246,3 +246,33 @@ client-IP trusted-proxy boundary, off-host encrypted backup/restore and browser
 acceptance are outstanding. Do not open port 8091 or remove the pilot perimeter
 until the separate gates pass. The CI syntax validator never contacts the
 production VPS and cannot enable the ingress by itself.
+
+### RE-03 KEY ONLY release acceptance — 2026-10-18
+
+**Current release pin:** `ararra@26bb92b7c383a22de67b0c1c40535fe5f19c450f`, merged as
+[Ararra PR #75](https://github.com/Lalalalendia/ararra/pull/75).
+The prior `a8b7994d` pin references below this section are historical
+checkpoints and must NOT be used for new installation.
+
+- One moderator = one revocable random key. A moderator signs in via that key
+  once, then receives a Secure/HttpOnly browser cookie. UI has no password
+  selector/first-time reset, and the API refuses the three former password
+  endpoints. Historical tables remain intact for rollback and backups.
+- New private server release trusts forwarded client IP only from the local
+  Nginx hop. The key-only vhost **overwrites** forwarded IP with
+  `$remote_addr` and applies per-client admission on `/v1/session`.
+- To activate: ensure latest release CI and rootless VPS stage pass,
+  verify Reader active and `MemAvailable>=320 MiB`, then explicitly dispatch
+  `translator-service.yml` on `main` with `install=YES`. This is manual,
+  never a merge-side automatic deployment.
+- Only **AFTER** key-only API+worker are installed and healthy, operator
+  reviews [HTTPS_INGRESS.md](HTTPS_INGRESS.md) Gate 4 and replaces only
+  Erida's HTTPS vhost with the key-only example. Do not add a second vhost,
+  touch Reader/landing or open port 8091. Roll back just the Erida vhost
+  to its saved Basic Auth copy if tests fail.
+- Old password login no longer works. Firegod's *team key* remains valid;
+  if the key was not retained, admin uses «Перевыпустить» once in Team.
+  Never reveal keys/credential values in GitHub, Notion, logs or chat.
+
+Public team-production acceptance (off-host restore/recovery, memory headroom,
+client-IP E2E and user workflow QA) remains a separate gate.
