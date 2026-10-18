@@ -86,7 +86,7 @@ jobs:
           if grep -Fq 'gemini_api_key' deploy/translator/install-release.sh; then
             echo 'error=legacy_installer_key_forbidden' >&2; exit 2
           fi
-          if grep -Eq 'secrets[.]TRANSLATOR_GEMINI_API_KEY' .github/workflows/translator-service.yml; then
+          if grep -REq 'secrets[.]TRANSLATOR_GEMINI_API_KEY' .github/workflows/; then
             echo 'error=legacy_secret_reference_forbidden' >&2; exit 2
           fi
           grep -Fq 'secrets.token_bytes(32)' deploy/translator/bootstrap-host.sh
@@ -177,7 +177,7 @@ jobs:
           if grep -Fq 'gemini_api_key' deploy/translator/install-release.sh; then
             echo 'error=legacy_installer_key_forbidden' >&2; exit 2
           fi
-          if grep -Eq 'secrets[.]TRANSLATOR_GEMINI_API_KEY' .github/workflows/translator-service.yml; then
+          if grep -REq 'secrets[.]TRANSLATOR_GEMINI_API_KEY' .github/workflows/; then
             echo 'error=legacy_secret_reference_forbidden' >&2; exit 2
           fi
           grep -Fq 'secrets.token_bytes(32)' deploy/translator/bootstrap-host.sh
