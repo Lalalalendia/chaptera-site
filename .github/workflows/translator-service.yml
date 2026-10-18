@@ -11,6 +11,9 @@ on:
       - 'deploy/translator/pilot-chapter-offline.py'
       - 'deploy/translator/chaptera-translator-api.service'
       - 'deploy/translator/chaptera-translator-worker.service'
+      - 'deploy/translator/chaptera-translator-drive-export.service'
+      - 'deploy/translator/chaptera-translator-drive-export.timer'
+      - 'deploy/translator/install-drive-export-units.sh'
   pull_request:
     paths:
       - '.github/workflows/translator-service.yml'
@@ -20,6 +23,9 @@ on:
       - 'deploy/translator/pilot-chapter-offline.py'
       - 'deploy/translator/chaptera-translator-api.service'
       - 'deploy/translator/chaptera-translator-worker.service'
+      - 'deploy/translator/chaptera-translator-drive-export.service'
+      - 'deploy/translator/chaptera-translator-drive-export.timer'
+      - 'deploy/translator/install-drive-export-units.sh'
   workflow_dispatch:
     inputs:
       install:
@@ -141,6 +147,15 @@ jobs:
           grep -Fqx 'Environment=CHAPTERA_PORT=8091' deploy/translator/chaptera-translator-api.service
           bash -n deploy/translator/bootstrap-host.sh
           bash -n deploy/translator/install-release.sh
+          bash -n deploy/translator/install-drive-export-units.sh
+          # OAuth refresh token belongs ONLY to the inert one-shot exporter.
+          grep -Fqx 'ExecStart=/opt/chaptera-translator/current/venv/bin/chaptera-server drive-outbox --run-once --allow-drive-write' deploy/translator/chaptera-translator-drive-export.service
+          grep -Fqx 'ConditionPathExists=/etc/chaptera-translator/drive-export-enabled' deploy/translator/chaptera-translator-drive-export.service
+          grep -Fqx 'LoadCredential=google_drive_refresh_token:/etc/chaptera-translator/google-drive/google_drive_refresh_token' deploy/translator/chaptera-translator-drive-export.service
+          grep -Fqx 'OnCalendar=*-*-* *:0/2:00' deploy/translator/chaptera-translator-drive-export.timer
+          if grep -Eq 'google_drive_(client|refresh)' deploy/translator/chaptera-translator-api.service deploy/translator/chaptera-translator-worker.service; then
+            echo 'error=oauth_exposure_to_long_lived_service' >&2; exit 2
+          fi
           bash -n deploy/translator/verify-staged-release.sh
           python -m py_compile deploy/translator/pilot-chapter-offline.py
           curl -fsSL --retry 3 -H 'Accept: application/vnd.github+json' \
@@ -232,6 +247,15 @@ jobs:
           grep -Fqx 'Environment=CHAPTERA_PORT=8091' deploy/translator/chaptera-translator-api.service
           bash -n deploy/translator/bootstrap-host.sh
           bash -n deploy/translator/install-release.sh
+          bash -n deploy/translator/install-drive-export-units.sh
+          # OAuth refresh token belongs ONLY to the inert one-shot exporter.
+          grep -Fqx 'ExecStart=/opt/chaptera-translator/current/venv/bin/chaptera-server drive-outbox --run-once --allow-drive-write' deploy/translator/chaptera-translator-drive-export.service
+          grep -Fqx 'ConditionPathExists=/etc/chaptera-translator/drive-export-enabled' deploy/translator/chaptera-translator-drive-export.service
+          grep -Fqx 'LoadCredential=google_drive_refresh_token:/etc/chaptera-translator/google-drive/google_drive_refresh_token' deploy/translator/chaptera-translator-drive-export.service
+          grep -Fqx 'OnCalendar=*-*-* *:0/2:00' deploy/translator/chaptera-translator-drive-export.timer
+          if grep -Eq 'google_drive_(client|refresh)' deploy/translator/chaptera-translator-api.service deploy/translator/chaptera-translator-worker.service; then
+            echo 'error=oauth_exposure_to_long_lived_service' >&2; exit 2
+          fi
           bash -n deploy/translator/verify-staged-release.sh
           python -m py_compile deploy/translator/pilot-chapter-offline.py
       - name: Configure pinned SSH identity

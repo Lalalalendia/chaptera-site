@@ -1,0 +1,11 @@
+[Unit]
+Description=Check ReadEra durable Google Drive export outbox (every 2 minutes)
+
+[Timer]
+OnCalendar=*-*-* *:0/2:00
+AccuracySec=30s
+Persistent=false
+Unit=chaptera-translator-drive-export.service
+
+[Install]
+WantedBy=timers.target
