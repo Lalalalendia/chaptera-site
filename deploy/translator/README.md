@@ -276,3 +276,29 @@ checkpoints and must NOT be used for new installation.
 
 Public team-production acceptance (off-host restore/recovery, memory headroom,
 client-IP E2E and user workflow QA) remains a separate gate.
+
+### RE-03 minimal anonymous screen — release acceptance 2026-10-18
+
+**Latest pinned release:** `ararra@657db7759155326160e0d6f9325ddca9f4a41be4`
+([Ararra PR #77](https://github.com/Lalalalendia/ararra/pull/77), merged).
+Earlier SHA references in this document are historical checkpoints.
+
+Anonymous visitors to `https://erida.chaptera.online/app` see **only** a
+centered key input and "Войти" button. No brand title, sidebar, project
+navigation or topbar is visible until the existing Secure HttpOnly team
+session is verified. On logout or failed restore, the shell disappears
+again. The initial HTML is fail-closed using body auth state and CSS;
+mobile direct-route navigation is positioned after the shell is revealed.
+Data confidentiality still belongs to the authenticated `/v1` API
+boundary, not to CSS visibility.
+
+Release pin guards insist on fail-closed Jinja, CSS and JS; Python 3.11/3.12,
+Web boundaries and real Chromium desktop/mobile tests passed in Ararra.
+Rollout remains **manual**: postmerge build + rootless VPS stage first,
+then operator checks Reader active and `MemAvailable >= 320 MiB`, and
+explicitly triggers GitHub Actions `install=YES`. No Nginx change,
+reader restart or billable Gemini calls are needed for this UI-only release.
+Verify `readlink -f /opt/chaptera-translator/current` matches the new
+pin and HTTPS /app renders only the one key form in an incognito window.
+After legitimate key login, confirm normal sidebar/cabinet; after logout,
+only the key form remains. Keep off-host backup/restore production gates.
