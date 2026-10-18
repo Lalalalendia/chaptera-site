@@ -33,6 +33,9 @@ jobs:
           unzip -q site/chaptera-landing-online-ready.zip -d .deploy
           install -m 0644 site/favicon.svg .deploy/chaptera-landing/assets/favicon.svg
           install -m 0644 site/social-preview.png .deploy/chaptera-landing/social-preview.png
+          # Keep the verified landing archive immutable: publish Erida as a separate static overlay.
+          test ! -e .deploy/chaptera-landing/erida
+          cp -a site/erida .deploy/chaptera-landing/erida
           python - <<'PY'
           import json
           import re
@@ -65,6 +68,10 @@ jobs:
           test -f .deploy/chaptera-landing/index.html
           test -f .deploy/chaptera-landing/assets/favicon.svg
           test -f .deploy/chaptera-landing/social-preview.png
+          test -s .deploy/chaptera-landing/erida/index.html
+          test -s .deploy/chaptera-landing/erida/privacy/index.html
+          test -s .deploy/chaptera-landing/erida/erida.css
+          grep -Fq 'href="/erida/privacy/"' .deploy/chaptera-landing/erida/index.html
           cmp site/favicon.svg .deploy/chaptera-landing/assets/favicon.svg
           cmp site/social-preview.png .deploy/chaptera-landing/social-preview.png
           grep -q 'property="og:image" content="https://chaptera.online/social-preview.png"' .deploy/chaptera-landing/index.html
@@ -103,4 +110,8 @@ jobs:
           curl -fsSI https://chaptera.online/social-preview.png | grep -qi 'content-type: image/png'
           curl -fsS https://chaptera.online/reader/ >/dev/null
           curl -fsS https://chaptera.online/privacy/ >/dev/null
+          # Body assertions distinguish real static pages from an SPA fallback or an error page.
+          curl -fsSL --max-time 30 https://chaptera.online/erida/ | grep -Fq '<title>Erida — Chapter translation and Google Drive export | Chaptera</title>'
+          curl -fsSL --max-time 30 https://chaptera.online/erida/privacy/ | grep -Fq '<title>Erida privacy policy | Chaptera</title>'
+          curl -fsSL --max-time 30 https://chaptera.online/erida/erida.css | grep -Fq 'color-scheme: light'
           curl -fsS https://reader.chaptera.online/ | grep -q 'Chaptera'

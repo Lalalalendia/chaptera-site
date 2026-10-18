@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Erida by Chaptera is a private translation and editorial workspace. Learn how the owner-authorized Google Drive integration exports editable chapter files.">
+  <meta name="robots" content="index, follow">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <link rel="canonical" href="https://chaptera.online/erida/">
+  <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
+  <link rel="stylesheet" href="/erida/erida.css">
+  <title>Erida — Chapter translation and Google Drive export | Chaptera</title>
+</head>
+<body>
+  <header>
+    <nav class="wrap" aria-label="Main navigation">
+      <a class="brand" href="/"><span>Chaptera</span><small>/ Erida</small></a>
+      <div class="links"><a href="/erida/" aria-current="page">Overview</a><a href="/erida/privacy/">Privacy policy</a></div>
+    </nav>
+  </header>
+  <main class="wrap">
+    <section class="hero" aria-labelledby="title">
+      <div class="eyebrow">Chaptera · Private workspace</div>
+      <h1 id="title">Erida makes chapter translation easier to review.</h1>
+      <p class="lead">Erida is a private, access-controlled workspace for preparing, translating and reviewing book chapters. An optional Google Drive connection exports the original text and draft translation into two editable folders selected by the account owner.</p>
+      <p><span class="pill">For authorized collaborators · No public registration</span></p>
+    </section>
+
+    <section class="cards" aria-label="What Erida does">
+      <div class="card">
+        <h2>Translation workflow</h2>
+        <p>Authorized team members prepare source chapters, queue machine translations and review the results. A machine-generated translation is a draft, not an automatic publication.</p>
+      </div>
+      <div class="card">
+        <h2>Editable Drive exports</h2>
+        <p>For each completed translation job, Erida can create one source TXT and one translated TXT inside book subfolders under the two Drive folders explicitly approved by the owner. Ordinary re-exports reuse existing files instead of overwriting human edits.</p>
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="access">
+      <h2 id="access">Why Erida asks for Google Drive permission</h2>
+      <p>Erida uses the <code>https://www.googleapis.com/auth/drive.file</code> permission. The Google account owner selects the intended folders during authorization. The integration uses this grant to:</p>
+      <ul>
+        <li>check the selected folders and identify files created by the integration;</li>
+        <li>create editable source and translation TXT files inside those folders;</li>
+        <li>reuse previously exported file IDs while preserving subsequent edits;</li>
+        <li>read back newly created test files during an explicitly requested integration check.</li>
+      </ul>
+      <p>Erida does not request general access to every file in the owner's Drive. This public page is informational; it does not log you in or ask for Google credentials.</p>
+    </section>
+
+    <section class="section" aria-labelledby="control">
+      <h2 id="control">The owner stays in control</h2>
+      <p>Access is granted through Google's own consent screen. The permission can be revoked in <a href="https://myaccount.google.com/connections" rel="noopener noreferrer">Google Account connections</a>. Revocation stops further authorized Drive requests; previously exported TXT files remain in the owner's Drive until removed there.</p>
+      <p><a class="button" href="/erida/privacy/">Read Erida's privacy policy</a></p>
+    </section>
+
+    <section class="section ru-note" lang="ru" aria-labelledby="ru">
+      <h2 id="ru">Кратко об Эриде</h2>
+      <p>Эрида — закрытый рабочий сервис Chaptera для перевода и редактирования глав. После разрешения владельца Google-аккаунта сервис выгружает исходный текст и черновой перевод в две выбранные папки Google Drive. Повторный экспорт не должен перезаписывать уже отредактированные TXT-файлы. Подробности обработки данных приведены в <a href="/erida/privacy/">политике конфиденциальности</a>.</p>
+    </section>
+  </main>
+  <footer><div class="wrap"><span>Erida · A Chaptera project · 2026</span><a href="/erida/privacy/">Privacy / Конфиденциальность</a></div></footer>
+</body>
+</html>

@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Erida privacy policy: how the private Chaptera workspace accesses, uses, stores, and shares Google Drive data when the owner authorizes export.">
+  <meta name="robots" content="index, follow">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <link rel="canonical" href="https://chaptera.online/erida/privacy/">
+  <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
+  <link rel="stylesheet" href="/erida/erida.css">
+  <title>Erida privacy policy | Chaptera</title>
+</head>
+<body>
+  <header>
+    <nav class="wrap" aria-label="Main navigation">
+      <a class="brand" href="/"><span>Chaptera</span><small>/ Erida</small></a>
+      <div class="links"><a href="/erida/">Overview</a><a href="/erida/privacy/" aria-current="page">Privacy policy</a></div>
+    </nav>
+  </header>
+  <main class="wrap policy">
+    <div class="eyebrow">Erida · Google Drive integration</div>
+    <h1>Privacy policy</h1>
+    <p class="subtle"><time datetime="2026-10-18">Effective October 18, 2026</time></p>
+    <p class="lead">This policy covers the Google Drive integration of Erida, a private translation and editorial workspace within the Chaptera project. It explains the data accessed through Google APIs, its uses, storage, sharing, and the account owner's controls.</p>
+
+    <section aria-labelledby="scope">
+      <h2 id="scope">1. What Google data Erida accesses</h2>
+      <p>With the Google account owner's consent, Erida requests the narrow <code>https://www.googleapis.com/auth/drive.file</code> OAuth scope. The owner must explicitly authorize two existing destination folders: one for source chapters and one for translated chapters. Knowing a folder ID alone does not grant permission.</p>
+      <p>Within those authorized folders, Erida may access folder IDs and names, file IDs, names, parent relationships, MIME types, file-level application metadata, and the content of TXT files that Erida creates when validating an export. Erida also receives an OAuth refresh token needed to make authorized requests. Erida does not use the integration to scan the owner's entire Google Drive.</p>
+    </section>
+
+    <section aria-labelledby="purpose">
+      <h2 id="purpose">2. Why and how the data is used</h2>
+      <ul>
+        <li>Confirm that the two owner-approved folders are accessible and suitable for exports.</li>
+        <li>Create source and draft-translation TXT files within book subfolders for completed translation jobs.</li>
+        <li>Identify and reuse already exported files so normal retries do not overwrite existing files or subsequent editorial changes.</li>
+        <li>When the operator explicitly starts a synthetic integration test, create two clearly named test TXT files, read them back, modify only those newly created test files, and verify that a retry preserves their edits and IDs.</li>
+      </ul>
+      <p>Source chapters and translations originate from Erida's separately managed translation workflow. They are not imported by scanning the owner's Drive. A translation may involve a separately configured external translation provider; this workflow is distinct from Google Drive authorization. Erida does not use Google Drive API data for advertising or to train AI models.</p>
+    </section>
+
+    <section aria-labelledby="storage">
+      <h2 id="storage">3. Storage and retention</h2>
+      <p>Exported TXT files are stored in the owner's own Google Drive and remain there until the owner deletes them. Google manages storage for those files under the account's own settings and policies.</p>
+      <p>Erida keeps source chapters, translations and job metadata in its server-side translation queue for the service workflow. Exporting to Google Drive does not automatically delete those queue records. Erida's local authorization flow stores a refresh token in a file restricted to the authorizing computer user; the server uses protected service credentials for unattended export. Tokens are used only to obtain Google API access for this integration and are not intentionally exposed in application logs.</p>
+      <p>There is no promise of automatic deletion of existing translation jobs on a fixed schedule. Operators should request removal of service-side records through the application's support contact if needed.</p>
+    </section>
+
+    <section aria-labelledby="sharing">
+      <h2 id="sharing">4. Sharing and third parties</h2>
+      <p>Google provides the Drive storage and OAuth authentication. Files may also be accessible to people with whom the owner shares them, or to other applications the owner independently authorizes. Erida does not transfer its Google OAuth refresh token to those applications, including ChatGPT, and does not sell Google user data or share it with advertisers.</p>
+      <p>The separate chapter translation service may use its configured translation API provider to process source text that an authorized user submits for translation. This is not a grant to that provider to browse Google Drive through Erida's OAuth integration.</p>
+    </section>
+
+    <section aria-labelledby="controls">
+      <h2 id="controls">5. Access controls, revocation and deletion</h2>
+      <p>The owner can revoke Erida's Google access at any time in <a href="https://myaccount.google.com/connections" rel="noopener noreferrer">Google Account connections</a>. Revoking authorization stops future authorized requests once the grant is revoked; it does not automatically erase files already exported to Drive or source/job records held by Erida's translation service.</p>
+      <p>To remove exported files, delete them from the authorized folders in Google Drive. For requests concerning service-side translation data or stored authorization credentials, contact Erida using the app support email displayed on its Google OAuth consent screen.</p>
+    </section>
+
+    <section aria-labelledby="security">
+      <h2 id="security">6. Security and changes</h2>
+      <p>Erida uses Google's OAuth consent process and HTTPS APIs, requests only the permissions needed for the selected folders, and restricts access to stored tokens. It does not require Google passwords. Changes to the integration's data handling will be reflected in this policy before materially different uses are introduced.</p>
+    </section>
+
+    <section class="ru-note" lang="ru" aria-labelledby="ru">
+      <h2 id="ru">Информация на русском языке</h2>
+      <p>Эрида получает доступ через <code>drive.file</code> только к папкам и файлам, разрешённым владельцем Google-аккаунта. Доступ используется для выгрузки исходников и черновых переводов в TXT, проверки созданных файлов и сохранения правок при повторной выгрузке. Токен авторизации хранится с ограничением доступа; он не передаётся ChatGPT. Ранее выгруженные файлы остаются на Google Диске до удаления владельцем, а записи очереди перевода могут храниться отдельно на сервере.</p>
+      <p>Разрешение можно отозвать в <a href="https://myaccount.google.com/connections" rel="noopener noreferrer">настройках Google-аккаунта</a>. Отзыв не удаляет уже созданные файлы. Для удаления серверных записей или авторизационных данных следует обратиться по адресу поддержки, указанному на экране согласия Google OAuth приложения Erida.</p>
+    </section>
+  </main>
+  <footer><div class="wrap"><span>Erida · A Chaptera project · 2026</span><a href="/erida/">Erida overview / Описание</a></div></footer>
+</body>
+</html>
