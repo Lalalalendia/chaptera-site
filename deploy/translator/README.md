@@ -516,3 +516,43 @@ On an accepted manual activation verify the `/opt/chaptera-translator/current`
 symlink points to exact Ararra SHA above; source-team GET without a team
 session returns HTTP 401, `/healthz` returns 200 and Reader/API/translation
 worker remain active. `source-worker` must stay disabled.
+
+### RE-02 shared immutable archive release — 2026-10-19
+
+**Latest pin:** Ararra `4b82d3e081203832849cdbca75fce3a71302e8fd`
+([PR #89](https://github.com/Lalalalendia/ararra/pull/89)),
+building on the already staged team read-only originals [#87](https://github.com/Lalalalendia/ararra/pull/87).
+Earlier SHAs above remain historical.
+
+At source job deletion, the API now validates source identity, exact saved
+UTF-8 byte length and SHA-256 of every verified original, then stores bodies
+with exact revision provenance in a separate immutable team archive in the
+SAME SQLite transaction as the personal job's deletion. If the archive
+cannot accept a chapter, the personal deletion fails closed. Identical
+source body SHA values have only one physical body row **in the archive**;
+different original revisions are not overwritten. Team members see a
+collapsed archived-originals reader. Moderators cannot purge revisions;
+the admin-only purge records metadata-only audit entries, leaving imports
+and accepted BookLibrary translations untouched.
+
+**Install has an additional hard disk gate:** at least **1,536 MiB available**
+on the filesystem mounted at `/var/lib/chaptera-translator`, before
+switching the current-release symlink. This is only a minimum safety
+margin for new archived bodies and SQLite WAL; it is not evidence that
+backup/recovery is complete. The operator also needs Reader active,
+MemAvailable >=320 MiB, a tested off-host encrypted restore, actual
+SQLite/WAL disk monitoring and confirmation of access rights for stored
+source material. No paid Gemini request or live third-party book scraping
+is performed by CI.
+
+The normal workflow still only builds and stages on VPS. Automatic API,
+translation-worker, Reader, source-worker or Drive timer activation is
+not permitted on push. The source-worker remains disabled. After verified
+postmerge staging, only a manual `main` `install=YES` may install.
+Validate loopback healthz=200, anonymous /v1/source-books/archive=401,
+and source-worker inactive after the explicit operator action.
+
+**Not yet included:** caching previous source chapters to avoid future
+third-party HTTP downloads, coordinated copyright/revocation across
+both job and archive tables, or bulk source-worker enablement.
+Track the remaining work in [#88](https://github.com/Lalalalendia/ararra/issues/88).
