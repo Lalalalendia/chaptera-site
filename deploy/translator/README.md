@@ -426,3 +426,19 @@ VPS Google OAuth credentials in `/etc/chaptera-translator/google-drive/` are
 unchanged and survive release changes. Actual export remains OFF until a
 separately authorized real completed-job pilot, opt-in policy, reviewed
 root marker and timer enablement.
+
+
+### RE-02 source collection is a separate, **disabled** service
+
+An optional, resource-bounded service template
+[chaptera-translator-source-worker.service](chaptera-translator-source-worker.service)
+and the reviewed [source-worker runbook](SOURCE_WORKER.md) are available.
+They are intentionally NOT part of bootstrap-host.sh, install-release.sh,
+translator-service.yml, automatic service restart or production sudoers.
+
+The API and Gemini worker can remain healthy while bulk original-source
+collection is disabled. Source-worker requires the pinned process-shared
+source request limiter, independent site permissions/robots acceptance,
+offsite restore and substantially more free RAM/disk. The reviewed root
+operator must authorize and start exactly one worker manually. No credentials
+for Gemini, Drive OAuth or moderator teams may be granted to the collector.

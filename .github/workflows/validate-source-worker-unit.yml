@@ -1,0 +1,62 @@
+name: Validate disabled source-worker unit
+
+on:
+  pull_request:
+    paths:
+      - 'deploy/translator/chaptera-translator-source-worker.service'
+      - 'deploy/translator/SOURCE_WORKER.md'
+      - '.github/workflows/validate-source-worker-unit.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'deploy/translator/chaptera-translator-source-worker.service'
+      - 'deploy/translator/SOURCE_WORKER.md'
+      - '.github/workflows/validate-source-worker-unit.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  systemd-unit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Prove inert startup, resource boundaries and no credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          unit=deploy/translator/chaptera-translator-source-worker.service
+          test -s "$unit"
+          test -s deploy/translator/SOURCE_WORKER.md
+          grep -Fxq 'User=chaptera-translator' "$unit"
+          grep -Fxq 'ConditionPathExists=/etc/chaptera-translator/source-collection-enabled' "$unit"
+          grep -Fxq 'ConditionPathExists=/opt/chaptera-translator/current/venv/bin/chaptera-server' "$unit"
+          grep -Fxq 'ExecStart=/opt/chaptera-translator/current/venv/bin/chaptera-server source-worker' "$unit"
+          grep -Fxq 'Environment=CHAPTERA_DB_PATH=/var/lib/chaptera-translator/jobs.sqlite3' "$unit"
+          grep -Fxq 'MemoryMax=160M' "$unit"
+          grep -Fxq 'CPUQuota=35%' "$unit"
+          grep -Fxq 'NoNewPrivileges=yes' "$unit"
+          grep -Fxq 'ProtectSystem=strict' "$unit"
+          if grep -Eq '^(LoadCredential=|SetCredential=|Environment=CHAPTERA_(TEAM|GEMINI|DRIVE)|ExecStart=.* (serve|worker)$)' "$unit"; then
+            echo 'error=source_worker_must_not_receive_secret_or_translation_role' >&2
+            exit 2
+          fi
+          # This PR cannot activate bulk crawling or alter the existing
+          # production root bootstrap and translator deploy script.
+          git diff --name-only origin/main...HEAD > "$RUNNER_TEMP/changed.txt"
+          if grep -Eq '(^deploy/translator/(bootstrap-host.sh|install-release.sh)$|^\.github/workflows/translator-service.yml$)' "$RUNNER_TEMP/changed.txt"; then
+            echo 'error=production_activation_forbidden' >&2
+            exit 2
+          fi
+      - name: Parse systemd unit with stubbed local executable
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo install -d /opt/chaptera-translator/current/venv/bin
+          sudo install -m 0755 /usr/bin/true /opt/chaptera-translator/current/venv/bin/chaptera-server
+          systemd-analyze verify deploy/translator/chaptera-translator-source-worker.service
+          echo 'source_worker_unit_syntax=PASS'
