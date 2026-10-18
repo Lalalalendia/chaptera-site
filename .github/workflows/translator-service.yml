@@ -41,7 +41,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 16
     env:
-      ARARRA_SHA: 26bb92b7c383a22de67b0c1c40535fe5f19c450f
+      ARARRA_SHA: 657db7759155326160e0d6f9325ddca9f4a41be4
     steps:
       - uses: actions/checkout@v4
         with:
@@ -49,7 +49,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: Lalalalendia/ararra
-          ref: 26bb92b7c383a22de67b0c1c40535fe5f19c450f
+          ref: 657db7759155326160e0d6f9325ddca9f4a41be4
           path: ararra
           persist-credentials: false
       - name: Verify exact Ararra version and protected main ancestry
@@ -87,6 +87,14 @@ jobs:
           grep -Fq 'forwarded_allow_ips="127.0.0.1"' ararra/src/chaptera_server/cli.py
           grep -Fq 'if kind != "team_key":' ararra/src/chaptera_server/team_sessions.py
           grep -Fq 'await accept(await auth.login(secret))' ararra/src/chaptera_server/web_ui/static/js/login-view.mjs
+          # Anonymous browser must display only the key and submit button;
+          # never reveal the navigation or team shell before session validation.
+          grep -Fq 'data-authenticated="false"' ararra/src/chaptera_server/web_ui/templates/shell.html
+          grep -Fq 'aria-label="Вход по ключу"' ararra/src/chaptera_server/web_ui/templates/shell.html
+          grep -Fq 'body:not([data-authenticated="true"]) .sidebar' ararra/src/chaptera_server/web_ui/static/css/readera.css
+          grep -Fq 'body:not([data-authenticated="true"]) #authenticated' ararra/src/chaptera_server/web_ui/static/css/readera.css
+          grep -Fq "document.body.dataset.authenticated='true'" ararra/src/chaptera_server/web_ui/static/js/readera.mjs
+          grep -Fq "document.body.dataset.authenticated='false'" ararra/src/chaptera_server/web_ui/static/js/login-view.mjs
           if grep -Fq '@router.post("/v1/session/password"' ararra/src/chaptera_server/http/routers/session.py; then
             echo 'error=legacy_password_login_forbidden' >&2; exit 2
           fi
@@ -172,7 +180,7 @@ jobs:
     environment: production
     timeout-minutes: 9
     env:
-      ARARRA_SHA: 26bb92b7c383a22de67b0c1c40535fe5f19c450f
+      ARARRA_SHA: 657db7759155326160e0d6f9325ddca9f4a41be4
     steps:
       - uses: actions/checkout@v4
         with:
