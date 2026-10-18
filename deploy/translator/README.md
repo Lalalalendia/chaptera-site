@@ -381,10 +381,12 @@ One-time reviewed root installation (example; adjust the staged path and use a
 frozen root-owned copy, never run arbitrary deploy-user-owned scripts as root):
 
 ```bash
+STAGED=/home/chaptera-deploy/chaptera-translator-incoming/f0be7180daf3e1fd3d25417ecd14590e76eda451
 install -d -o root -g root -m 0700 /root/erida-drive-export-review
-install -o root -g root -m 0700 <reviewed>/install-drive-export-units.sh /root/erida-drive-export-review/
-install -o root -g root -m 0644 <reviewed>/chaptera-translator-drive-export.service /root/erida-drive-export-review/
-install -o root -g root -m 0644 <reviewed>/chaptera-translator-drive-export.timer /root/erida-drive-export-review/
+install -o root -g root -m 0700 "$STAGED/install-drive-export-units.sh" /root/erida-drive-export-review/
+install -o root -g root -m 0644 "$STAGED/chaptera-translator-drive-export.service" /root/erida-drive-export-review/
+install -o root -g root -m 0644 "$STAGED/chaptera-translator-drive-export.timer" /root/erida-drive-export-review/
+# Review the frozen /root/ copy, including unit ExecStart, folder IDs and credentials paths.
 bash /root/erida-drive-export-review/install-drive-export-units.sh
 ```
 

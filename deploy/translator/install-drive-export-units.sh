@@ -5,13 +5,14 @@ set -euo pipefail
 (( EUID == 0 )) || { echo 'error=root_required' >&2; exit 2; }
 [[ $# == 0 ]] || { echo 'usage: install-drive-export-units.sh' >&2; exit 2; }
 source_dir="$(cd -- "$(dirname -- "$0")" && pwd -P)"
-[[ "$(stat -c '%u:%g' "$source_dir")" == "0:0" ]] || {
-  echo 'error=untrusted_unit_source_dir' >&2; exit 2;
+[[ ! -L "$0" && "$(stat -c '%u:%g:%a' "$source_dir")" == "0:0:700" &&
+   "$(stat -c '%u:%g:%a' "$0")" == "0:0:700" ]] || {
+  echo 'error=untrusted_unit_source_dir_or_script' >&2; exit 2;
 }
 for name in chaptera-translator-drive-export.service chaptera-translator-drive-export.timer; do
   src="$source_dir/$name"
   dest="/etc/systemd/system/$name"
-  [[ -f "$src" && ! -L "$src" && "$(stat -c '%u:%g' "$src")" == "0:0" ]] || {
+  [[ -f "$src" && ! -L "$src" && "$(stat -c '%u:%g:%a' "$src")" == "0:0:644" ]] || {
     echo "error=untrusted_source_$name" >&2; exit 2;
   }
   [[ ! -L "$dest" ]] || { echo "error=linked_dest_$name" >&2; exit 2; }

@@ -150,6 +150,10 @@ jobs:
           bash -n deploy/translator/bootstrap-host.sh
           bash -n deploy/translator/install-release.sh
           bash -n deploy/translator/install-drive-export-units.sh
+          # Reviewed installer must never activate services or the Google timer.
+          if grep -Eq 'systemctl[[:space:]]+(enable|start|restart|preset)' deploy/translator/install-drive-export-units.sh; then
+            echo 'error=drive_export_installer_must_be_inert' >&2; exit 2
+          fi
           # OAuth refresh token belongs ONLY to the inert one-shot exporter.
           grep -Fqx 'ExecStart=/opt/chaptera-translator/current/venv/bin/chaptera-server drive-outbox --run-once --allow-drive-write' deploy/translator/chaptera-translator-drive-export.service
           grep -Fqx 'ConditionPathExists=/etc/chaptera-translator/drive-export-enabled' deploy/translator/chaptera-translator-drive-export.service
@@ -250,6 +254,10 @@ jobs:
           bash -n deploy/translator/bootstrap-host.sh
           bash -n deploy/translator/install-release.sh
           bash -n deploy/translator/install-drive-export-units.sh
+          # Reviewed installer must never activate services or the Google timer.
+          if grep -Eq 'systemctl[[:space:]]+(enable|start|restart|preset)' deploy/translator/install-drive-export-units.sh; then
+            echo 'error=drive_export_installer_must_be_inert' >&2; exit 2
+          fi
           # OAuth refresh token belongs ONLY to the inert one-shot exporter.
           grep -Fqx 'ExecStart=/opt/chaptera-translator/current/venv/bin/chaptera-server drive-outbox --run-once --allow-drive-write' deploy/translator/chaptera-translator-drive-export.service
           grep -Fqx 'ConditionPathExists=/etc/chaptera-translator/drive-export-enabled' deploy/translator/chaptera-translator-drive-export.service
