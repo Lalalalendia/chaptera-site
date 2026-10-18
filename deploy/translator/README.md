@@ -329,3 +329,33 @@ After install verify /opt/chaptera-translator/current points at the pin,
 healthz=200, unauthenticated API=401, Reader/worker/API all active; then
 refresh an authenticated /app/import and check compact toolbar and
 normal import interactions. Secure HttpOnly sessions are unaffected.
+
+### RE-03 neutral browser title before login — 2026-10-18
+
+**Latest release pin:** `ararra@95d6319c88eeef10687a3107a7745c870ec484f2`,
+from [Ararra PR #80](https://github.com/Lalalalendia/ararra/pull/80).
+Older SHA references above remain historical checkpoints.
+
+Issue: although the anonymous webpage visually showed only the key field and
+submit button, the unprotected HTML `<title>РидЭра — переводческая платформа</title>`
+was disclosed immediately in browser chrome before session verification.
+
+- Initial Jinja `<title>Вход</title>` across all `/app` paths before any
+  JavaScript or cookie restore can complete; no brand name in the tab/window.
+- Only after the `/v1/session` team-key session passes authorization and
+  content API loads, the browser tab title becomes `РидЭра — переводческая платформа`.
+  Logout, invalid cookie, or session restore failure restores `Вход`.
+- Python/Jinja and real Chromium 1440px/390px test: first paint, no session,
+  admin/mod key, browser reload with live cookie, logout and reload. No
+  changes to Nginx, TLS, Reader, credentials or persistent data.
+- The public domain `erida.chaptera.online` itself still reveals the name,
+  and static HTML/JS are not secrets; server-side protected API continues
+  to be the security boundary.
+
+Deployment remains manual: after the pinned build and rootless VPS stage
+succeed postmerge, root operator checks Reader active and
+`MemAvailable >= 320 MiB`, then explicitly runs translator-service
+workflow on `main` with `install=YES`. Verify /opt/chaptera-translator/current
+points to the new pin, /healthz 200, unauthenticated /v1/jobs 401, Reader
+and worker active, and check private-browser tab title `Вход` before key login.
+No Gemini calls or Nginx modifications required.

@@ -41,7 +41,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 16
     env:
-      ARARRA_SHA: 05587830dd3614289bf2e3ff0522aba926eb8480
+      ARARRA_SHA: 95d6319c88eeef10687a3107a7745c870ec484f2
     steps:
       - uses: actions/checkout@v4
         with:
@@ -49,7 +49,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: Lalalalendia/ararra
-          ref: 05587830dd3614289bf2e3ff0522aba926eb8480
+          ref: 95d6319c88eeef10687a3107a7745c870ec484f2
           path: ararra
           persist-credentials: false
       - name: Verify exact Ararra version and protected main ancestry
@@ -95,6 +95,15 @@ jobs:
           grep -Fq 'body:not([data-authenticated="true"]) #authenticated' ararra/src/chaptera_server/web_ui/static/css/readera.css
           grep -Fq "document.body.dataset.authenticated='true'" ararra/src/chaptera_server/web_ui/static/js/readera.mjs
           grep -Fq "document.body.dataset.authenticated='false'" ararra/src/chaptera_server/web_ui/static/js/login-view.mjs
+          # RE-03: the initial anonymous HTML tab title must be generic,
+          # with branding returned only after successful team-key session.
+          grep -Fq '<title>Вход</title>' ararra/src/chaptera_server/web_ui/templates/shell.html
+          if grep -Fq '<title>РидЭра' ararra/src/chaptera_server/web_ui/templates/shell.html; then
+            echo 'error=anonymous_browser_title_leak' >&2; exit 2
+          fi
+          grep -Fq "document.title='РидЭра — переводческая платформа'" ararra/src/chaptera_server/web_ui/static/js/readera.mjs
+          grep -Fq "document.title='Вход'" ararra/src/chaptera_server/web_ui/static/js/readera.mjs
+          grep -Fq "document.title='Вход'" ararra/src/chaptera_server/web_ui/static/js/login-view.mjs
           # RE-04: compact authenticated workbench without a detached logout
           # row or a second nested source-job UI card. UI-only release.
           grep -Fq 'class="topbar-account"' ararra/src/chaptera_server/web_ui/templates/shell.html
@@ -191,7 +200,7 @@ jobs:
     environment: production
     timeout-minutes: 9
     env:
-      ARARRA_SHA: 05587830dd3614289bf2e3ff0522aba926eb8480
+      ARARRA_SHA: 95d6319c88eeef10687a3107a7745c870ec484f2
     steps:
       - uses: actions/checkout@v4
         with:
