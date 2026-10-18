@@ -89,3 +89,23 @@ For rollback isolation, the site receiver explicitly denies `release_mode=manual
 when `GITHUB_ACTOR` identifies a bot. Thus the delegated GitHub App token
 cannot turn its automatic published-event authority into an intentional
 operator rollback, even though both modes share GitHub's Actions endpoint.
+
+## Erida OAuth public information pages
+
+Google OAuth's `External / In production` branding for the separate Erida
+Desktop OAuth client uses public static, login-free pages on the verified
+`chaptera.online` domain:
+
+- `https://chaptera.online/erida/` — Erida description, purpose of scoped Drive access.
+- `https://chaptera.online/erida/privacy/` — Google Drive data access/use/storage/sharing, revocation and retention.
+
+Source lives under `site/erida/`, **outside the immutable landing v2 archive**.
+Both `validate.yml` and `deploy.yml` overlay and assert those exact files;
+the production smoke checks live HTTP bodies to reject SPA fallback. Merging to
+`main` starts the existing production workflow. Do not claim public publication
+until that deployment passes and both HTTPS pages are verified.
+
+The Google Cloud operator must separately verify ownership of
+`chaptera.online` in Google Search Console and set the matching app-homepage
+and privacy-policy URLs in OAuth Branding. The Google OAuth refresh token is
+never part of this static site.

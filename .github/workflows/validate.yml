@@ -26,6 +26,8 @@ jobs:
           unzip -q site/chaptera-landing-online-ready.zip -d .site-check
           install -m 0644 site/favicon.svg .site-check/chaptera-landing/assets/favicon.svg
           install -m 0644 site/social-preview.png .site-check/chaptera-landing/social-preview.png
+          test ! -e .site-check/chaptera-landing/erida
+          cp -a site/erida .site-check/chaptera-landing/erida
           python - <<'PY'
           import json
           import re
@@ -59,6 +61,17 @@ jobs:
           test -f "$root/index.html"
           test -f "$root/assets/favicon.svg"
           test -f "$root/social-preview.png"
+          test -s "$root/erida/index.html"
+          test -s "$root/erida/privacy/index.html"
+          test -s "$root/erida/erida.css"
+          grep -Fq '<link rel="canonical" href="https://chaptera.online/erida/">' "$root/erida/index.html"
+          grep -Fq '<link rel="canonical" href="https://chaptera.online/erida/privacy/">' "$root/erida/privacy/index.html"
+          grep -Fq 'href="/erida/privacy/"' "$root/erida/index.html"
+          grep -Fq 'https://www.googleapis.com/auth/drive.file' "$root/erida/privacy/index.html"
+          grep -Fq 'Google Account connections' "$root/erida/privacy/index.html"
+          if grep -Ei '<script|example[.]com|TODO|INSERT_' "$root/erida/index.html" "$root/erida/privacy/index.html"; then
+            echo 'unexpected_placeholder_or_script_in_erida_oauth_pages' >&2; exit 1
+          fi
           cmp site/favicon.svg "$root/assets/favicon.svg"
           cmp site/social-preview.png "$root/social-preview.png"
           grep -q 'rel="icon" type="image/svg+xml"' "$root/index.html"
