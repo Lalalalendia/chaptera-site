@@ -5,7 +5,7 @@ It never changes Reader binaries, Nginx, the landing, or the Reader database.
 
 ## Verified baseline
 
-- Pinned Ararra main SHA: `5cd31252c59dfa47843341a4ec16b8276e1df985`, wheel `0.6.2`.
+- Pinned Ararra main SHA: `a8b7994d078bdd1b47442202f13688e5d8cb0ce8`, wheel `0.6.2`.
 - Gemini `gemini-3.8-flash`: a real, synthetic translation on the VPS passed structural QA and SQLite persistence.
 - VPS: Python 3.12, 891 MiB RAM, approximately 354 MiB MemAvailable at last probe, existing Reader service and ~2 GiB swap.
 - SSH deploy user has no general sudo or Docker access.
@@ -29,7 +29,7 @@ the exact pinned GitHub source and tests, then builds a SHA-256-verified offline
 wheelhouse. The second uses protected production SSH to stage the archive and
 the installation scripts under:
 
-`~/chaptera-translator-incoming/5cd31252c59dfa47843341a4ec16b8276e1df985/`
+`~/chaptera-translator-incoming/a8b7994d078bdd1b47442202f13688e5d8cb0ce8/`
 
 The stage job also installs the verified wheelhouse into a **temporary** user-owned
 virtual environment on the VPS, then executes `html_v0` and `atoms_v1` mock
@@ -88,7 +88,7 @@ would allow replacement between review and execution. Example for the
 different):
 
 ```bash
-STAGED=/home/chaptera-deploy/chaptera-translator-incoming/5cd31252c59dfa47843341a4ec16b8276e1df985
+STAGED=/home/chaptera-deploy/chaptera-translator-incoming/a8b7994d078bdd1b47442202f13688e5d8cb0ce8
 sudo install -d -o root -g root -m 0700 /root/chaptera-translator-bootstrap
 sudo install -o root -g root -m 0700 "$STAGED/bootstrap-host.sh" /root/chaptera-translator-bootstrap/
 sudo install -o root -g root -m 0644 "$STAGED/chaptera-translator-api.service" /root/chaptera-translator-bootstrap/
@@ -212,7 +212,7 @@ shared-key выпуск потребуется **отдельная санкци
 ### RE-01-PERSONAL-ONLY-CREDENTIAL-01 — one worker, zero shared Gemini keys
 
 The current deployment pin, wheelhouse and VPS staging use
-`ararra@5cd31252c59dfa47843341a4ec16b8276e1df985`.
+`ararra@a8b7994d078bdd1b47442202f13688e5d8cb0ce8`.
 **Exactly one Google project has exactly one saved moderator key.**
 The root bootstrap creates the stable `gemini_vault_key`; both services
 load that vault, and no `TRANSLATOR_GEMINI_API_KEY` secret is required
@@ -223,3 +223,9 @@ bootstrap, `MemAvailable >=320 MiB`, explicit protected
 `workflow_dispatch install=YES`, loopback-only port 8091, healthy Reader,
 and later independently reviewed HTTPS/client-IP proxy.
 The automated push workflow always stages **without** installing.
+
+### RE-01 release pin acceptance — 2026-10-18
+
+The staged release pin was updated to the exact merged `ararra@a8b7994d078bdd1b47442202f13688e5d8cb0ce8` (`RE-06C` batch selection/queue plus `RE-09A` manual Drive export/OAuth). The workflow guards require those modules in the *pinned wheel source*, not merely in the latest upstream main. This is a stage/CI update only; it does not alter the permanent VPS services.
+
+Before an operator performs the one-time reviewed root-owned bootstrap, verify the preflight and the exact-head two-job `translator-service` CI (build plus rootless VPS stage). Bootstrap copies must remain root-owned and immutable to the SSH deploy principal. Subsequent `install=YES` is separately approved and must pass the existing Reader/memory/loopback gates. Do not assume package/CI success proves an installed service. Personal moderator Gemini keys remain required; no paid Gemini calls and no public Nginx/HTTPS exposure are authorized by this pin.
