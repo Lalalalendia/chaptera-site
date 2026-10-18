@@ -47,7 +47,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 16
     env:
-      ARARRA_SHA: f0be7180daf3e1fd3d25417ecd14590e76eda451
+      ARARRA_SHA: cbfdb2068f3759b30cbb0bcc76b51ad2ae552910
     steps:
       - uses: actions/checkout@v4
         with:
@@ -55,7 +55,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: Lalalalendia/ararra
-          ref: f0be7180daf3e1fd3d25417ecd14590e76eda451
+          ref: cbfdb2068f3759b30cbb0bcc76b51ad2ae552910
           path: ararra
           persist-credentials: false
       - name: Verify exact Ararra version and protected main ancestry
@@ -83,6 +83,9 @@ jobs:
           test -s ararra/src/chaptera_server/drive_export.py
           test -s ararra/src/chaptera_server/drive_oauth_setup.py
           test -s ararra/src/chaptera_server/drive_outbox.py
+          # Required for one shared moderator/book/(source,translation) root.
+          grep -Fq 'CHAPTERA_DRIVE_ROOT_FOLDER_ID' ararra/src/chaptera_server/cli.py
+          grep -Fq 'readeraPartFolder' ararra/src/chaptera_server/drive_export.py
           grep -Fq '"drive-outbox"' ararra/src/chaptera_server/cli.py
           grep -Fq 'gemini_vault_key=_read_systemd_credential' ararra/src/chaptera_server/config.py
           grep -Fq 'provider = MemberGeminiProviders(store, settings)' ararra/src/chaptera_server/cli.py
@@ -157,6 +160,8 @@ jobs:
           # OAuth refresh token belongs ONLY to the inert one-shot exporter.
           grep -Fqx 'ExecStart=/opt/chaptera-translator/current/venv/bin/chaptera-server drive-outbox --run-once --allow-drive-write' deploy/translator/chaptera-translator-drive-export.service
           grep -Fqx 'ConditionPathExists=/etc/chaptera-translator/drive-export-enabled' deploy/translator/chaptera-translator-drive-export.service
+          grep -Fqx 'ConditionPathExists=/etc/chaptera-translator/drive-export.env' deploy/translator/chaptera-translator-drive-export.service
+          grep -Fqx 'EnvironmentFile=/etc/chaptera-translator/drive-export.env' deploy/translator/chaptera-translator-drive-export.service
           grep -Fqx 'LoadCredential=google_drive_refresh_token:/etc/chaptera-translator/google-drive/google_drive_refresh_token' deploy/translator/chaptera-translator-drive-export.service
           grep -Fqx 'OnCalendar=*-*-* *:0/2:00' deploy/translator/chaptera-translator-drive-export.timer
           if grep -Eq 'google_drive_(client|refresh)' deploy/translator/chaptera-translator-api.service deploy/translator/chaptera-translator-worker.service; then
@@ -221,7 +226,7 @@ jobs:
     environment: production
     timeout-minutes: 9
     env:
-      ARARRA_SHA: f0be7180daf3e1fd3d25417ecd14590e76eda451
+      ARARRA_SHA: cbfdb2068f3759b30cbb0bcc76b51ad2ae552910
     steps:
       - uses: actions/checkout@v4
         with:
@@ -261,6 +266,8 @@ jobs:
           # OAuth refresh token belongs ONLY to the inert one-shot exporter.
           grep -Fqx 'ExecStart=/opt/chaptera-translator/current/venv/bin/chaptera-server drive-outbox --run-once --allow-drive-write' deploy/translator/chaptera-translator-drive-export.service
           grep -Fqx 'ConditionPathExists=/etc/chaptera-translator/drive-export-enabled' deploy/translator/chaptera-translator-drive-export.service
+          grep -Fqx 'ConditionPathExists=/etc/chaptera-translator/drive-export.env' deploy/translator/chaptera-translator-drive-export.service
+          grep -Fqx 'EnvironmentFile=/etc/chaptera-translator/drive-export.env' deploy/translator/chaptera-translator-drive-export.service
           grep -Fqx 'LoadCredential=google_drive_refresh_token:/etc/chaptera-translator/google-drive/google_drive_refresh_token' deploy/translator/chaptera-translator-drive-export.service
           grep -Fqx 'OnCalendar=*-*-* *:0/2:00' deploy/translator/chaptera-translator-drive-export.timer
           if grep -Eq 'google_drive_(client|refresh)' deploy/translator/chaptera-translator-api.service deploy/translator/chaptera-translator-worker.service; then

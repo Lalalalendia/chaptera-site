@@ -4,6 +4,7 @@ Wants=network-online.target
 After=network-online.target
 ConditionPathExists=/opt/chaptera-translator/current/venv/bin/chaptera-server
 ConditionPathExists=/etc/chaptera-translator/drive-export-enabled
+ConditionPathExists=/etc/chaptera-translator/drive-export.env
 RequiresMountsFor=/var/lib/chaptera-translator
 StartLimitIntervalSec=90
 StartLimitBurst=3
@@ -16,6 +17,8 @@ WorkingDirectory=/var/lib/chaptera-translator
 Environment=CHAPTERA_DB_PATH=/var/lib/chaptera-translator/jobs.sqlite3
 Environment=CHAPTERA_DRIVE_SOURCE_FOLDER_ID=1daqCzEVgPdX639YV5otTLxgVTPbfeBEp
 Environment=CHAPTERA_DRIVE_TRANSLATION_FOLDER_ID=1X2ZP8Fzbnq5MEAWJyGSErVGGFkfGBrR9
+# Operator-selected approved shared parent; file is root-owned and persists across releases.
+EnvironmentFile=/etc/chaptera-translator/drive-export.env
 Environment=PYTHONDONTWRITEBYTECODE=1
 # Root-owned Google OAuth lives OUTSIDE releases and stays across deployments.
 # The long-lived API and Gemini worker never receive these three credentials.
