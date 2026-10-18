@@ -77,6 +77,10 @@ jobs:
           grep -Fqx 'Environment=CHAPTERA_ADMIN_MEMBER_ID=operator' deploy/translator/chaptera-translator-api.service
           grep -Fqx 'LoadCredential=gemini_vault_key:/etc/chaptera-translator/credentials/gemini_vault_key' deploy/translator/chaptera-translator-api.service
           grep -Fqx 'LoadCredential=gemini_vault_key:/etc/chaptera-translator/credentials/gemini_vault_key' deploy/translator/chaptera-translator-worker.service
+          # One project = one moderator-owned key; no global Gemini credential.
+          ! grep -Fq 'LoadCredential=gemini_api_key:' deploy/translator/chaptera-translator-worker.service
+          ! grep -Fq 'gemini_api_key' deploy/translator/install-release.sh
+          ! grep -Fq 'TRANSLATOR_GEMINI_API_KEY' .github/workflows/translator-service.yml
           grep -Fq 'secrets.token_bytes(32)' deploy/translator/bootstrap-host.sh
           grep -Fqx 'Environment=CHAPTERA_BIND=127.0.0.1' deploy/translator/chaptera-translator-api.service
           grep -Fqx 'Environment=CHAPTERA_PORT=8091' deploy/translator/chaptera-translator-api.service
@@ -156,6 +160,10 @@ jobs:
           grep -Fqx 'Environment=CHAPTERA_ADMIN_MEMBER_ID=operator' deploy/translator/chaptera-translator-api.service
           grep -Fqx 'LoadCredential=gemini_vault_key:/etc/chaptera-translator/credentials/gemini_vault_key' deploy/translator/chaptera-translator-api.service
           grep -Fqx 'LoadCredential=gemini_vault_key:/etc/chaptera-translator/credentials/gemini_vault_key' deploy/translator/chaptera-translator-worker.service
+          # One project = one moderator-owned key; no global Gemini credential.
+          ! grep -Fq 'LoadCredential=gemini_api_key:' deploy/translator/chaptera-translator-worker.service
+          ! grep -Fq 'gemini_api_key' deploy/translator/install-release.sh
+          ! grep -Fq 'TRANSLATOR_GEMINI_API_KEY' .github/workflows/translator-service.yml
           grep -Fq 'secrets.token_bytes(32)' deploy/translator/bootstrap-host.sh
           grep -Fqx 'Environment=CHAPTERA_BIND=127.0.0.1' deploy/translator/chaptera-translator-api.service
           grep -Fqx 'Environment=CHAPTERA_PORT=8091' deploy/translator/chaptera-translator-api.service
@@ -213,23 +221,21 @@ jobs:
           test -n "$HOST" && test -n "$USER"
           ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$USER@$HOST" \
             "bash 'chaptera-translator-incoming/$ARARRA_SHA/verify-staged-release.sh' '$ARARRA_SHA'"
-      - name: Install protected Gemini credential and activate only translator services
+      - name: Activate personal-key translator services (explicit install=YES only)
         if: github.event_name == 'workflow_dispatch' && inputs.install == 'YES'
         env:
           HOST: ${{ secrets.DEPLOY_HOST }}
           USER: ${{ secrets.DEPLOY_USER }}
-          GEMINI_KEY: ${{ secrets.TRANSLATOR_GEMINI_API_KEY }}
         shell: bash
         run: |
           set -euo pipefail
-          test -n "$GEMINI_KEY" || { echo 'Missing protected translator Gemini key'; exit 2; }
+          # No global Gemini credential exists in personal-key mode: no secret
+          # from Actions is sent to the VPS, and no paid call is made here.
           ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$USER@$HOST" \
-            "test -f /etc/chaptera-translator/.bootstrapped && test -d /etc/chaptera-translator/credentials" || {
-              echo 'One-time root bootstrap missing. Leave services unchanged.'
+            "test -f /etc/chaptera-translator/.bootstrapped && test -s /etc/chaptera-translator/credentials/gemini_vault_key" || {
+              echo 'One-time root bootstrap/vault missing. Leave services unchanged.'
               exit 3
             }
-          printf '%s\n' "$GEMINI_KEY" | ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
-            "$USER@$HOST" 'umask 077; cd /etc/chaptera-translator/credentials && tmp=$(mktemp .gemini.XXXXXX) && cat > "$tmp" && test -s "$tmp" && chmod 600 "$tmp" && mv -f "$tmp" gemini_api_key'
           ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$USER@$HOST" \
             "bash 'chaptera-translator-incoming/$ARARRA_SHA/install-release.sh' '$ARARRA_SHA'"
       - name: Record no-billable-deploy scope

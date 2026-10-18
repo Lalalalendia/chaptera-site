@@ -5,7 +5,7 @@ It never changes Reader binaries, Nginx, the landing, or the Reader database.
 
 ## Verified baseline
 
-- Pinned Ararra main SHA: `b4f81f6e2598d422ad06b7db91e5b805dd008c86`, wheel `0.6.2`.
+- Pinned Ararra main SHA: `5cd31252c59dfa47843341a4ec16b8276e1df985`, wheel `0.6.2`.
 - Gemini `gemini-3.8-flash`: a real, synthetic translation on the VPS passed structural QA and SQLite persistence.
 - VPS: Python 3.12, 891 MiB RAM, approximately 354 MiB MemAvailable at last probe, existing Reader service and ~2 GiB swap.
 - SSH deploy user has no general sudo or Docker access.
@@ -29,7 +29,7 @@ the exact pinned GitHub source and tests, then builds a SHA-256-verified offline
 wheelhouse. The second uses protected production SSH to stage the archive and
 the installation scripts under:
 
-`~/chaptera-translator-incoming/b4f81f6e2598d422ad06b7db91e5b805dd008c86/`
+`~/chaptera-translator-incoming/5cd31252c59dfa47843341a4ec16b8276e1df985/`
 
 The stage job also installs the verified wheelhouse into a **temporary** user-owned
 virtual environment on the VPS, then executes `html_v0` and `atoms_v1` mock
@@ -105,7 +105,7 @@ would allow replacement between review and execution. Example for the
 different):
 
 ```bash
-STAGED=/home/chaptera-deploy/chaptera-translator-incoming/b4f81f6e2598d422ad06b7db91e5b805dd008c86
+STAGED=/home/chaptera-deploy/chaptera-translator-incoming/5cd31252c59dfa47843341a4ec16b8276e1df985
 sudo install -d -o root -g root -m 0700 /root/chaptera-translator-bootstrap
 sudo install -o root -g root -m 0700 "$STAGED/bootstrap-host.sh" /root/chaptera-translator-bootstrap/
 sudo install -o root -g root -m 0644 "$STAGED/chaptera-translator-api.service" /root/chaptera-translator-bootstrap/
@@ -171,11 +171,13 @@ fit this VPS or that the Reader cannot experience memory pressure.
 Open [Translator stage/deploy workflow](../../.github/workflows/translator-service.yml)
 in GitHub Actions, select `Run workflow`, `main`, and `install=YES`.
 
-The workflow retrieves the already configured protected
-`TRANSLATOR_GEMINI_API_KEY` and writes it to a mode-0600 server credential
-file through pinned SSH. `systemd LoadCredential` delivers it only to the
-worker; API receives the separate team-token credential. Secrets never go into
-GitHub source or systemd unit environment variables.
+The personal-key release does **not** use a shared `TRANSLATOR_GEMINI_API_KEY`
+or copy any global Gemini key over SSH. After **operator-approved** bootstrap,
+both API and the single worker receive the same private `gemini_vault_key`
+through `systemd LoadCredential`. API additionally receives the protected
+team token. Moderators enter their own Google-project keys under
+`/app/cabinet`; a moderator without a key has queued chapters, **not**
+billable requests. No paid Gemini call is made by this installation workflow.
 
 The release is installed in an isolated Python environment without system
 `python3.12-venv`, the `current` symlink is switched atomically, and **only
@@ -214,9 +216,27 @@ A full chapter requires a separate explicitly bounded pilot.
 собственных Google-проектов (правило **1 проект = 1 ключ**). API хранит
 AES-256-GCM ciphertext, а worker использует только ключ владельца главы;
 участники без ключа ожидают в SQLite без платных попыток.
-Существующий host `gemini_api_key` оставлен для возможного отката на
-прошлый выпуск, персональный worker его не использует.
+**В новом выпуске общий `gemini_api_key` не требуется**, не передаётся
+через GitHub Actions и не загружается systemd worker. Для отката на старый
+shared-key выпуск потребуется **отдельная санкционированная процедура
+возврата legacy credential/unit**, а не автоматическая подмена личных
+ключей общим.
 
 Не включать Nginx/public API и не делать платный пилот автоматически.
 Блокер root bootstrap [#46](https://github.com/Lalalalendia/chaptera-site/issues/46)
 остаётся до фактического санкционированного выполнения.
+
+### RE-01-PERSONAL-ONLY-CREDENTIAL-01 — one worker, zero shared Gemini keys
+
+The current deployment pin, wheelhouse and VPS staging use
+`ararra@5cd31252c59dfa47843341a4ec16b8276e1df985`.
+**Exactly one Google project has exactly one saved moderator key.**
+The root bootstrap creates the stable `gemini_vault_key`; both services
+load that vault, and no `TRANSLATOR_GEMINI_API_KEY` secret is required
+in GitHub or on the host. Staging uses only disposable synthetic keys.
+
+Required operator acceptance is unchanged: one reviewed root-owned
+bootstrap, `MemAvailable >=320 MiB`, explicit protected
+`workflow_dispatch install=YES`, loopback-only port 8091, healthy Reader,
+and later independently reviewed HTTPS/client-IP proxy.
+The automated push workflow always stages **without** installing.
