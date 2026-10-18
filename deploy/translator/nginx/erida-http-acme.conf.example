@@ -1,0 +1,18 @@
+# Dedicated HTTP ACME challenge for Erida. No plaintext app proxy.
+# Install in /etc/nginx/conf.d/ after erida.chaptera.online DNS resolves to this VPS.
+server {
+    listen 80;
+    listen [::]:80;
+    server_name erida.chaptera.online;
+    server_tokens off;
+
+    location ^~ /.well-known/acme-challenge/ {
+        root /var/www/erida-acme;
+        default_type text/plain;
+        try_files $uri =404;
+    }
+
+    location / {
+        return 404;
+    }
+}
