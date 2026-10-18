@@ -302,3 +302,30 @@ Verify `readlink -f /opt/chaptera-translator/current` matches the new
 pin and HTTPS /app renders only the one key form in an incognito window.
 After legitimate key login, confirm normal sidebar/cabinet; after logout,
 only the key form remains. Keep off-host backup/restore production gates.
+
+### RE-04 compact operator workbench — 2026-10-18
+
+**Latest release pin:** `ararra@05587830dd3614289bf2e3ff0522aba926eb8480`,
+merged from [Ararra PR #78](https://github.com/Lalalalendia/ararra/pull/78).
+All earlier SHAs in this document are historical.
+
+Operator feedback from real authenticated import screen: detached oversized
+logout row, tall header, cards with excess vertical whitespace, nested
+source-job card and scattered controls. New release moves logout beside
+the identity in a 50px account bar, reduces card/navigation/form density,
+flattens background source-job controls, and makes source/URL/discover
+share one desktop row (stacked responsively on mobile). Existing key-only
+anonymous login, HTTP API authorization, credentials, Reader, worker,
+translation queue and persisted source-job IDs are unchanged.
+
+Acceptance: Ararra Python 3.11/3.12, Web boundaries, real Chromium 1440px +
+390px regression smoke pass, including account logout bounds, import
+without nested second card, source collection and mobile no-overflow.
+Postmerge build + rootless stage must pass before the operator manually
+triggers `translator-service.yml` on `main` with `install=YES`, but
+only after verifying Reader active and MemAvailable >=320 MiB.
+Nginx does NOT need modification for this UI-only release.
+After install verify /opt/chaptera-translator/current points at the pin,
+healthz=200, unauthenticated API=401, Reader/worker/API all active; then
+refresh an authenticated /app/import and check compact toolbar and
+normal import interactions. Secure HttpOnly sessions are unaffected.
