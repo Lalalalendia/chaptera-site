@@ -1,0 +1,12 @@
+[Unit]
+Description=ReadEra daily encrypted off-host Google Drive backup (operator opt-in)
+
+[Timer]
+OnCalendar=*-*-* 03:30:00 UTC
+Persistent=true
+RandomizedDelaySec=30min
+AccuracySec=1min
+Unit=chaptera-translator-backup-drive.service
+
+[Install]
+WantedBy=timers.target

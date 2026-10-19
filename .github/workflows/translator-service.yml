@@ -14,6 +14,10 @@ on:
       - 'deploy/translator/chaptera-translator-drive-export.service'
       - 'deploy/translator/chaptera-translator-drive-export.timer'
       - 'deploy/translator/install-drive-export-units.sh'
+      - 'deploy/translator/chaptera-translator-backup-drive.service'
+      - 'deploy/translator/chaptera-translator-backup-drive.timer'
+      - 'deploy/translator/install-backup-drive-units.sh'
+      - 'deploy/translator/RE08_GOOGLE_DRIVE_BACKUP.md'
   pull_request:
     paths:
       - '.github/workflows/translator-service.yml'
@@ -26,6 +30,10 @@ on:
       - 'deploy/translator/chaptera-translator-drive-export.service'
       - 'deploy/translator/chaptera-translator-drive-export.timer'
       - 'deploy/translator/install-drive-export-units.sh'
+      - 'deploy/translator/chaptera-translator-backup-drive.service'
+      - 'deploy/translator/chaptera-translator-backup-drive.timer'
+      - 'deploy/translator/install-backup-drive-units.sh'
+      - 'deploy/translator/RE08_GOOGLE_DRIVE_BACKUP.md'
   workflow_dispatch:
     inputs:
       install:
@@ -50,7 +58,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 16
     env:
-      ARARRA_SHA: 0ba63f5e24d3409df4a49f1aa2a630be5e782cdd
+      ARARRA_SHA: 6c2c04674167dc2993abbd21d8551140f7c5659d
     steps:
       - uses: actions/checkout@v4
         with:
@@ -58,7 +66,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: Lalalalendia/ararra
-          ref: 0ba63f5e24d3409df4a49f1aa2a630be5e782cdd
+          ref: 6c2c04674167dc2993abbd21d8551140f7c5659d
           path: ararra
           persist-credentials: false
       - name: Verify exact Ararra version and protected main ancestry
@@ -76,6 +84,11 @@ jobs:
           # RE-08 vault escrow: recovered SQLite is not enough to recover
           # moderator Gemini credentials without the original systemd master.
           test -s ararra/src/chaptera_server/ops_backup_vault.py
+          # RE-08-GDRIVE-01: encrypted-only resumable off-host transport.
+          test -s ararra/src/chaptera_server/ops_backup_drive.py
+          test -s ararra/tests/test_ops_backup_drive.py
+          grep -Fq 'def backup_once(' ararra/src/chaptera_server/ops_backup_drive.py
+          grep -Fq 'def test_daily_backup_uploads_only_ciphertext_and_verified_readback(' ararra/tests/test_ops_backup_drive.py
           test -s ararra/tests/test_ops_backup_vault_escrow.py
           grep -Fq 'def verify_restored_vault(' ararra/src/chaptera_server/ops_backup_vault.py
           grep -Fq 'def test_vault_witness_checks_all_projects_not_only_first(' ararra/tests/test_ops_backup_vault_escrow.py
@@ -202,6 +215,15 @@ jobs:
           bash -n deploy/translator/bootstrap-host.sh
           bash -n deploy/translator/install-release.sh
           bash -n deploy/translator/install-drive-export-units.sh
+          bash -n deploy/translator/install-backup-drive-units.sh
+          # Inert-by-default: never create an active root timer from CI.
+          if grep -Eq 'systemctl[[:space:]]+(enable|start|restart|preset)' deploy/translator/install-backup-drive-units.sh; then
+            echo 'error=backup_drive_installer_must_be_inert' >&2; exit 2
+          fi
+          grep -Fqx 'ConditionPathExists=/etc/chaptera-translator/backup-drive-enabled' deploy/translator/chaptera-translator-backup-drive.service
+          grep -Fqx 'LoadCredential=backup_rbe_key:/etc/chaptera-translator/backup/backup_rbe_key' deploy/translator/chaptera-translator-backup-drive.service
+          grep -Fq 'ops_backup_drive --run-once --allow-upload' deploy/translator/chaptera-translator-backup-drive.service
+          grep -Fqx 'OnCalendar=*-*-* 03:30:00 UTC' deploy/translator/chaptera-translator-backup-drive.timer
           # Reviewed installer must never activate services or the Google timer.
           if grep -Eq 'systemctl[[:space:]]+(enable|start|restart|preset)' deploy/translator/install-drive-export-units.sh; then
             echo 'error=drive_export_installer_must_be_inert' >&2; exit 2
@@ -217,6 +239,10 @@ jobs:
             echo 'error=oauth_exposure_to_long_lived_service' >&2; exit 2
           fi
           bash -n deploy/translator/verify-staged-release.sh
+          # The offline VPS stage must verify encryption and Google readback
+          # without real external Drive requests or production SQLite access.
+          grep -Fq 'stage_drive_encrypted_backup_roundtrip=PASS' deploy/translator/verify-staged-release.sh
+          grep -Fq 'stage_drive_backup_network_calls=0' deploy/translator/verify-staged-release.sh
           # Regression against staging a worker that would run without the
           # new Gemini budget or fail to verify independent vault escrow.
           grep -Fq 'assert store.claim_next(require_personal_key=True) is None' deploy/translator/verify-staged-release.sh
@@ -280,7 +306,7 @@ jobs:
     environment: production
     timeout-minutes: 9
     env:
-      ARARRA_SHA: 0ba63f5e24d3409df4a49f1aa2a630be5e782cdd
+      ARARRA_SHA: 6c2c04674167dc2993abbd21d8551140f7c5659d
     steps:
       - uses: actions/checkout@v4
         with:
@@ -313,6 +339,15 @@ jobs:
           bash -n deploy/translator/bootstrap-host.sh
           bash -n deploy/translator/install-release.sh
           bash -n deploy/translator/install-drive-export-units.sh
+          bash -n deploy/translator/install-backup-drive-units.sh
+          # Inert-by-default: never create an active root timer from CI.
+          if grep -Eq 'systemctl[[:space:]]+(enable|start|restart|preset)' deploy/translator/install-backup-drive-units.sh; then
+            echo 'error=backup_drive_installer_must_be_inert' >&2; exit 2
+          fi
+          grep -Fqx 'ConditionPathExists=/etc/chaptera-translator/backup-drive-enabled' deploy/translator/chaptera-translator-backup-drive.service
+          grep -Fqx 'LoadCredential=backup_rbe_key:/etc/chaptera-translator/backup/backup_rbe_key' deploy/translator/chaptera-translator-backup-drive.service
+          grep -Fq 'ops_backup_drive --run-once --allow-upload' deploy/translator/chaptera-translator-backup-drive.service
+          grep -Fqx 'OnCalendar=*-*-* 03:30:00 UTC' deploy/translator/chaptera-translator-backup-drive.timer
           # Reviewed installer must never activate services or the Google timer.
           if grep -Eq 'systemctl[[:space:]]+(enable|start|restart|preset)' deploy/translator/install-drive-export-units.sh; then
             echo 'error=drive_export_installer_must_be_inert' >&2; exit 2
@@ -328,6 +363,10 @@ jobs:
             echo 'error=oauth_exposure_to_long_lived_service' >&2; exit 2
           fi
           bash -n deploy/translator/verify-staged-release.sh
+          # The offline VPS stage must verify encryption and Google readback
+          # without real external Drive requests or production SQLite access.
+          grep -Fq 'stage_drive_encrypted_backup_roundtrip=PASS' deploy/translator/verify-staged-release.sh
+          grep -Fq 'stage_drive_backup_network_calls=0' deploy/translator/verify-staged-release.sh
           # Regression against staging a worker that would run without the
           # new Gemini budget or fail to verify independent vault escrow.
           grep -Fq 'assert store.claim_next(require_personal_key=True) is None' deploy/translator/verify-staged-release.sh
@@ -373,6 +412,9 @@ jobs:
             deploy/translator/chaptera-translator-drive-export.service \
             deploy/translator/chaptera-translator-drive-export.timer \
             deploy/translator/install-drive-export-units.sh \
+            deploy/translator/chaptera-translator-backup-drive.service \
+            deploy/translator/chaptera-translator-backup-drive.timer \
+            deploy/translator/install-backup-drive-units.sh \
             "$USER@$HOST:chaptera-translator-incoming/$ARARRA_SHA/"
           ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$USER@$HOST" \
             "cd 'chaptera-translator-incoming/$ARARRA_SHA' && sha256sum -c translator-wheelhouse.sha256 --status && echo translator_staging=PASS"

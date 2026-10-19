@@ -247,6 +247,104 @@ print("stage_sqlite_encrypted_tamper_rejected=PASS")
 print("live_translator_database_access=no")
 PY
 
+# RE-08 Google Drive encrypted off-host backup: real wheel, ephemeral SQLite
+# and fake HTTPS OAuth/Drive only. Never open production SQLite or credentials.
+"$work/venv/bin/python" - "$work" <<'PY'
+import hashlib
+import json
+from pathlib import Path
+import re
+import sys
+import httpx
+
+from chaptera_server.drive_export import GoogleDriveClient
+from chaptera_server.ops_backup_drive import EncryptedDriveBackups, backup_once
+from chaptera_server.ops_backup_crypto import generate_key
+from chaptera_server.storage import JobSpec, QueueStore
+
+work = Path(sys.argv[1])
+folder = "readeraSyntheticOffhostFolder0123"
+db = work / "synthetic-drive-backup.sqlite3"
+store = QueueStore(db)
+store.create_job("offline", JobSpec(
+    chapter_id="synthetic",
+    source_html="<p>Секретная глава, только для локального теста.</p>",
+))
+scratch = work / "synthetic-gdrive-backup-work"
+scratch.mkdir(mode=0o700)
+keydir = work / "synthetic-gdrive-backup-keys"
+keydir.mkdir(mode=0o700)
+key = generate_key(keydir / "separate-rbe-key")
+class StubDrive:
+    def __init__(self):
+        self.meta = None
+        self.data = None
+        self.pending = None
+        self.posts = 0
+        self.readbacks = 0
+    def __call__(self, req):
+        if req.url.host == "oauth2.googleapis.com":
+            return httpx.Response(200, json={"access_token":"synthetic-only"})
+        assert req.url.host == "www.googleapis.com"
+        assert req.headers.get("authorization") == "Bearer synthetic-only"
+        path = req.url.path
+        if path == "/drive/v3/files/" + folder:
+            return httpx.Response(200, json={
+                "id":folder, "mimeType":"application/vnd.google-apps.folder",
+                "trashed":False, "capabilities":{"canAddChildren":True},
+            })
+        if path == "/drive/v3/files" and req.method == "GET":
+            return httpx.Response(200, json={
+                "files":([] if self.meta is None else [self.meta]),
+                "incompleteSearch":False,
+            })
+        if path == "/upload/drive/v3/files" and req.method == "POST":
+            self.posts += 1
+            self.pending = {"meta":json.loads(req.content), "data":bytearray(),
+                            "size":int(req.headers["x-upload-content-length"])}
+            return httpx.Response(200, headers={"Location":
+                "https://www.googleapis.com/upload/drive/v3/files"
+                "?uploadType=resumable&upload_id=staged-fixture"})
+        if path == "/upload/drive/v3/files" and req.method == "PUT":
+            m = re.fullmatch(r"bytes (\d+)-(\d+)/(\d+)",
+                             req.headers["content-range"])
+            assert m and int(m[1]) == len(self.pending["data"])
+            self.pending["data"].extend(req.content)
+            end, length = int(m[2]), int(m[3])
+            assert length == self.pending["size"]
+            if end + 1 < length:
+                return httpx.Response(308,headers={"Range":f"bytes=0-{end}"})
+            self.data = bytes(self.pending["data"])
+            self.meta = {**self.pending["meta"],
+                         "id":"syntheticEncryptedRemoteFile0123"}
+            return httpx.Response(200,json=self.meta)
+        if path == "/drive/v3/files/syntheticEncryptedRemoteFile0123":
+            assert self.meta is not None
+            if req.url.params.get("alt") == "media":
+                self.readbacks += 1
+                return httpx.Response(200,content=self.data)
+            return httpx.Response(200,json={**self.meta,
+                "size":str(len(self.data)),
+                "md5Checksum":hashlib.md5(self.data,usedforsecurity=False).hexdigest(),
+            })
+        raise AssertionError("Unexpected synthetic Drive request")
+stub = StubDrive()
+with httpx.Client(transport=httpx.MockTransport(stub),
+                  trust_env=False,follow_redirects=False) as http:
+    client = GoogleDriveClient(client_id="fixture",client_secret="fixture",
+                               refresh_token="fixture",http=http)
+    remote = EncryptedDriveBackups(client, folder)
+    receipt = backup_once(db,key,scratch,remote)
+    assert receipt["status"]=="uploaded_verified"
+    assert hashlib.sha256(stub.data).hexdigest()==receipt["archive_sha256"]
+    assert b"\xd0\xa1\xd0\xb5\xd0\xba\xd1\x80\xd0\xb5\xd1\x82" not in stub.data
+    assert not list(scratch.iterdir())
+    assert stub.posts == 1 and stub.readbacks == 1
+print("stage_drive_encrypted_backup_roundtrip=PASS")
+print("stage_drive_encrypted_backup_plaintext_uploaded=no")
+print("stage_drive_backup_network_calls=0")
+PY
+
 # Disposable, no-Gemini-network acceptance of the personal project vault.
 "$work/venv/bin/python" - "$work" <<'PY'
 import asyncio
