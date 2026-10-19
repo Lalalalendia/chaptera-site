@@ -214,6 +214,11 @@ jobs:
             echo 'error=oauth_exposure_to_long_lived_service' >&2; exit 2
           fi
           bash -n deploy/translator/verify-staged-release.sh
+          # Regression against staging a worker that would run without the
+          # new Gemini budget or fail to verify independent vault escrow.
+          grep -Fq 'assert store.claim_next(require_personal_key=True) is None' deploy/translator/verify-staged-release.sh
+          grep -Fq 'stage_personal_gemini_vault_recovery=PASS' deploy/translator/verify-staged-release.sh
+          grep -Fq 'stage_personal_gemini_rpd_caps=PASS' deploy/translator/verify-staged-release.sh
           python -m py_compile deploy/translator/pilot-chapter-offline.py
           curl -fsSL --retry 3 -H 'Accept: application/vnd.github+json' \
             -H "Authorization: Bearer $GH_TOKEN" \
@@ -320,6 +325,11 @@ jobs:
             echo 'error=oauth_exposure_to_long_lived_service' >&2; exit 2
           fi
           bash -n deploy/translator/verify-staged-release.sh
+          # Regression against staging a worker that would run without the
+          # new Gemini budget or fail to verify independent vault escrow.
+          grep -Fq 'assert store.claim_next(require_personal_key=True) is None' deploy/translator/verify-staged-release.sh
+          grep -Fq 'stage_personal_gemini_vault_recovery=PASS' deploy/translator/verify-staged-release.sh
+          grep -Fq 'stage_personal_gemini_rpd_caps=PASS' deploy/translator/verify-staged-release.sh
           python -m py_compile deploy/translator/pilot-chapter-offline.py
       - name: Configure pinned SSH identity
         env:
