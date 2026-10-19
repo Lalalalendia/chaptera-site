@@ -47,7 +47,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 16
     env:
-      ARARRA_SHA: 4b82d3e081203832849cdbca75fce3a71302e8fd
+      ARARRA_SHA: 1f23b4b6d78dddbd733ba971259b590d8af1d2dd
     steps:
       - uses: actions/checkout@v4
         with:
@@ -55,7 +55,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: Lalalalendia/ararra
-          ref: 4b82d3e081203832849cdbca75fce3a71302e8fd
+          ref: 1f23b4b6d78dddbd733ba971259b590d8af1d2dd
           path: ararra
           persist-credentials: false
       - name: Verify exact Ararra version and protected main ancestry
@@ -79,6 +79,17 @@ jobs:
           test -s ararra/src/chaptera_server/chapter_batches.py
           test -s ararra/src/chaptera_server/http/routers/batches.py
           test -s ararra/src/chaptera_server/web_ui/static/js/book-batch-view.mjs
+          # RE-E2E-01: a complete offline, zero-Gemini-cost vertical regression
+          # must ship with the exact release, not only in upstream main.
+          test -s ararra/tests/test_release_vertical_slice.py
+          grep -Fq 'def test_book_link_to_batch_to_draft_qa_and_both_export_boundaries' ararra/tests/test_release_vertical_slice.py
+          # RE-06C: fail-closed personal project budget with a live SQLite read
+          # under the same write transaction as each quota reservation.
+          test -s ararra/tests/test_project_daily_caps.py
+          grep -Fq 'def set_daily_cap(' ararra/src/chaptera_server/personal_gemini_keys.py
+          grep -Fq 'limit_reader=live_cap' ararra/src/chaptera_server/member_gemini_provider.py
+          grep -Fq 'con.execute("BEGIN IMMEDIATE")' ararra/src/chaptera_server/quota.py
+          grep -Fq 'def test_missing_cap_never_sends_and_lowered_limit_stops_cached_provider' ararra/tests/test_project_daily_caps.py
           # Drive is manual-only until owner OAuth and first real E2E acceptance.
           test -s ararra/src/chaptera_server/drive_export.py
           test -s ararra/src/chaptera_server/drive_oauth_setup.py
@@ -254,7 +265,7 @@ jobs:
     environment: production
     timeout-minutes: 9
     env:
-      ARARRA_SHA: 4b82d3e081203832849cdbca75fce3a71302e8fd
+      ARARRA_SHA: 1f23b4b6d78dddbd733ba971259b590d8af1d2dd
     steps:
       - uses: actions/checkout@v4
         with:
