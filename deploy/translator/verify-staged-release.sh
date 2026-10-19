@@ -259,6 +259,9 @@ from chaptera_server.api import create_app
 from chaptera_server.config import Settings
 from chaptera_server.member_gemini_provider import MemberGeminiProviders
 from chaptera_server.personal_gemini_keys import PersonalGeminiKeys
+from chaptera_server.ops_backup import BackupRejected, snapshot
+from chaptera_server.ops_backup_crypto import generate_key, seal, unseal
+from chaptera_server.ops_backup_vault import verify_restored_vault
 from chaptera_server.storage import JobSpec, QueueStore
 from chaptera_server.worker import TranslationWorker
 import chaptera_server.member_gemini_provider as member_provider
@@ -278,6 +281,10 @@ a_key = "AIzaTEST_aaaaaaaaaaaaaaaaaaaaaaaaaa"
 b_key = "AIzaTEST_bbbbbbbbbbbbbbbbbbbbbbbbbb"
 vault.put("moda", "project-mod-a01", a_key)
 vault.put("modb", "project-mod-b01", b_key)
+# RE-06C defaults to fail-closed: a stored API key alone MUST NOT enable
+# provider use. These limits are synthetic and never reach Google.
+vault.set_daily_cap("moda", "project-mod-a01", 4)
+vault.set_daily_cap("modb", "project-mod-b01", 2)
 with sqlite3.connect(personal_db) as database:
     assert a_key.encode() not in personal_db.read_bytes()
     assert b_key.encode() not in personal_db.read_bytes()
@@ -304,6 +311,47 @@ async def trial():
 asyncio.run(trial())
 assert used == [b_key, a_key, a_key]
 assert all(job["status"] == "completed" for job in store.list_jobs())
+# RE-08: the existing RBE backup key and application vault key are independent.
+# Only disposable files under the rootless staging scratch directory are used.
+personal_snapshot_dir = work / "synthetic-personal-snapshots"
+personal_snapshot_dir.mkdir(mode=0o700)
+personal_manifest = snapshot(personal_db, personal_snapshot_dir)
+personal_rbe_keys = work / "synthetic-personal-rbe-keys"
+personal_rbe_keys.mkdir(mode=0o700)
+personal_rbe_key = generate_key(personal_rbe_keys / "rbe.key")
+personal_sealed_dir = work / "synthetic-personal-sealed"
+personal_sealed_dir.mkdir(mode=0o700)
+personal_archive = seal(personal_manifest, personal_rbe_key, personal_sealed_dir)
+personal_restore_dir = work / "synthetic-personal-restore"
+personal_restore_dir.mkdir(mode=0o700)
+personal_restored = unseal(
+    personal_archive, personal_rbe_key, personal_restore_dir / "restored.sqlite3"
+)
+personal_escrow = work / "synthetic-independent-escrow"
+personal_escrow.mkdir(mode=0o700)
+escrow_file = personal_escrow / "gemini_vault_key"
+escrow_file.write_text(master + "\n", encoding="ascii")
+escrow_file.chmod(0o600)
+assert verify_restored_vault(personal_restored, escrow_file)["projects_checked"] == 2
+with sqlite3.connect(personal_restored) as restored_database:
+    assert restored_database.execute(
+        "SELECT COUNT(*) FROM member_gemini_budgets"
+    ).fetchone()[0] == 2
+    assert restored_database.execute(
+        "SELECT daily_request_cap FROM member_gemini_budgets "
+        "WHERE project_id='project-mod-a01'"
+    ).fetchone()[0] == 4
+wrong_escrow = personal_escrow / "incorrect_vault"
+wrong_escrow.write_text(base64.b64encode(bytes([3]) * 32).decode("ascii"), encoding="ascii")
+wrong_escrow.chmod(0o600)
+try:
+    verify_restored_vault(personal_restored, wrong_escrow)
+except BackupRejected:
+    pass
+else:
+    raise AssertionError("Incorrect Gemini vault escrow was accepted")
+print("stage_personal_gemini_vault_recovery=PASS")
+print("stage_personal_gemini_rpd_caps=PASS")
 vault.delete("modb", "project-mod-b01")
 assert vault.choices("modb") == []
 print("stage_personal_gemini_encrypted_vault=PASS")
