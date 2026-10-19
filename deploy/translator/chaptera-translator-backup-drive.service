@@ -1,0 +1,51 @@
+[Unit]
+Description=ReadEra AES-GCM encrypted SQLite backup to private Google Drive (opt-in)
+Wants=network-online.target
+After=network-online.target
+ConditionPathExists=/opt/chaptera-translator/current/venv/bin/python
+ConditionPathExists=/etc/chaptera-translator/backup-drive-enabled
+ConditionPathExists=/etc/chaptera-translator/backup-drive.env
+ConditionPathExists=/etc/chaptera-translator/backup/backup_rbe_key
+RequiresMountsFor=/var/lib/chaptera-translator
+StartLimitIntervalSec=3600
+StartLimitBurst=2
+
+[Service]
+Type=oneshot
+User=chaptera-translator
+Group=chaptera-translator
+WorkingDirectory=/var/lib/chaptera-translator
+Environment=PYTHONDONTWRITEBYTECODE=1
+EnvironmentFile=/etc/chaptera-translator/backup-drive.env
+# The separate root-owned RBE key and OAuth are systemd LoadCredential only.
+# This short-lived service is isolated from the long-lived API/Gemini worker.
+LoadCredential=backup_rbe_key:/etc/chaptera-translator/backup/backup_rbe_key
+LoadCredential=google_drive_client_id:/etc/chaptera-translator/google-drive/google_drive_client_id
+LoadCredential=google_drive_client_secret:/etc/chaptera-translator/google-drive/google_drive_client_secret
+LoadCredential=google_drive_refresh_token:/etc/chaptera-translator/google-drive/google_drive_refresh_token
+# Fail closed if existing drive.file OAuth cannot see this newly shared folder.
+ExecStartPre=/opt/chaptera-translator/current/venv/bin/python -m chaptera_server.ops_backup_drive --probe-folder
+ExecStart=/opt/chaptera-translator/current/venv/bin/python -m chaptera_server.ops_backup_drive --run-once --allow-upload --database /var/lib/chaptera-translator/jobs.sqlite3 --key-file %d/backup_rbe_key --scratch-root /var/lib/chaptera-translator/backup-drive-work
+Restart=no
+TimeoutStartSec=3600
+UMask=0077
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/chaptera-translator/backup-drive-work
+ProtectControlGroups=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+CapabilityBoundingSet=
+AmbientCapabilities=
+MemoryAccounting=yes
+MemoryHigh=192M
+MemoryMax=256M
+TasksMax=32
+LimitNOFILE=2048
