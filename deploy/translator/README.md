@@ -3,23 +3,38 @@
 This is a dedicated service deployment, **not** a public Chaptera site release.
 It never changes Reader binaries, Nginx, the landing, or the Reader database.
 
-## Verified baseline
+## Current release candidate — 19 October 2026 (not automatically installed)
 
-- Pinned Ararra main SHA: `26bb92b7c383a22de67b0c1c40535fe5f19c450f`, wheel `0.6.2`.
-- Gemini `gemini-3.8-flash`: a real, synthetic translation on the VPS passed structural QA and SQLite persistence.
-- VPS: Python 3.12, 891 MiB RAM, approximately 354 MiB MemAvailable at last probe, existing Reader service and ~2 GiB swap.
-- SSH deploy user has no general sudo or Docker access.
-- API is bound only to `127.0.0.1:8091`. One SQLite worker only.
-- Bootstrap creates a single host administrator called `operator` in the protected
-  `team_tokens_json` credential. The API unit explicitly sets
-  `CHAPTERA_ADMIN_MEMBER_ID=operator`: without it ReadEra's administrative
-  member-management endpoints would remain inaccessible. No public
-  registration, no additional roles.
-- This pinned revision includes SQLite browser sessions and Argon2id moderator
-  passwords in addition to the existing API key protocol. A browser frontend
-  still requires a separately reviewed HTTPS/trusted-proxy ingress. **Do not
-  expose port 8091 publicly** or assume the unit file makes the UI reachable
-  outside the host.
+- **Source pin for CI and rootless VPS staging:** `ararra@1f23b4b6d78dddbd733ba971259b590d8af1d2dd`, package `0.6.2`.
+  The GitHub Actions workflow, not this historical README, is the authoritative pin.
+- This pin includes [RE-E2E-01](https://github.com/Lalalalendia/ararra/pull/90):
+  the offline, synthetic TOC → import → two-job batch → mock Gemini →
+  diagnostic QA → offline Drive mock → verified TXT recovery test.
+  **It does not prove a live crawler, paid model or live Google Drive.**
+- It includes [RE-06C RPD caps](https://github.com/Lalalalendia/ararra/pull/74):
+  each moderator's Gemini project must have an explicit local daily-request
+  cap, checked atomically before a network attempt. Caps count calls rather
+  than guaranteed billable tokens/charges. A missing cap blocks sending.
+- Authentication is **team-key only** on the new source; legacy password
+  tables remain for rollback, but password issuance/login endpoints are removed.
+  The private API binds `127.0.0.1:8091`; never expose this port directly.
+- Encrypted SQLite backup and S3 transfer are implemented and tested with
+  disposable data, but production **off-host backup, independent key escrow,
+  retention and disaster-restore are NOT accepted** ([ararra #56](https://github.com/Lalalalendia/ararra/issues/56)).
+- An older private-service deployment was confirmed by explicit `install=YES`
+  on 18 October; that does **not** prove this release pin is installed.
+  Staging on push is rootless and **never restarts the live API/worker**.
+  Only an operator-approved manual `workflow_dispatch install=YES` can do so,
+  after checking Reader health, free memory ≥320 MiB, loopback-only API,
+  rollback availability and the applicable operational gates.
+- VPS history: Python 3.12, approximately 891 MiB RAM and 2 GiB swap. These
+  are **historical measurements**; take fresh measurements before installation.
+- This workflow does not change Reader binaries, Nginx, landing or Reader DB,
+  enable the separate source worker, activate the Drive timer, or call Gemini.
+
+The dated release notes below are retained as history. Their former "latest
+pin" and password instructions must **not** override the current source pin
+and key-only authentication model above.
 
 ## Step 1 — automatic, nonmutating staging
 
@@ -29,7 +44,7 @@ the exact pinned GitHub source and tests, then builds a SHA-256-verified offline
 wheelhouse. The second uses protected production SSH to stage the archive and
 the installation scripts under:
 
-`~/chaptera-translator-incoming/26bb92b7c383a22de67b0c1c40535fe5f19c450f/`
+`~/chaptera-translator-incoming/<ARARRA_SHA>/`
 
 The stage job also installs the verified wheelhouse into a **temporary** user-owned
 virtual environment on the VPS, then executes `html_v0` and `atoms_v1` mock
