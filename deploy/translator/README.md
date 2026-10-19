@@ -3,9 +3,9 @@
 This is a dedicated service deployment, **not** a public Chaptera site release.
 It never changes Reader binaries, Nginx, the landing, or the Reader database.
 
-## Current release candidate — 19 October 2026 (not automatically installed)
+## Current release candidate — 20 October 2026 (not automatically installed)
 
-- **Source pin for CI and rootless VPS staging:** `ararra@0ba63f5e24d3409df4a49f1aa2a630be5e782cdd`, package `0.6.2`.
+- **Source pin for CI and rootless VPS staging:** `ararra@47536321ae438262867adb76aab51b16ef9441c3`, package `0.6.2`.
   The GitHub Actions workflow, not this historical README, is the authoritative pin.
 - This pin includes [RE-E2E-01](https://github.com/Lalalalendia/ararra/pull/90):
   the offline, synthetic TOC → import → two-job batch → mock Gemini →
@@ -24,6 +24,15 @@ It never changes Reader binaries, Nginx, the landing, or the Reader database.
   invalid private key permissions and any corrupted stored project.
   It must run only on an **offline restored SQLite candidate**, not production.
   This is a code/recovery-test gate, not evidence of an off-host backup.
+- The pin additionally includes [RE-08 encrypted Drive backup transport](https://github.com/Lalalalendia/ararra/pull/92)
+  and [optional third-folder Google Picker consent](https://github.com/Lalalalendia/ararra/pull/93).
+  The ReadEra Desktop OAuth client is **In production** as recorded in
+  [RE-09A on 18 October](https://app.notion.com/p/3fc32a84beec815da939f4860a3728c1),
+  **not** in Testing. A seven-day Testing refresh-token warning does not
+  apply. Preserve the existing source/translation OAuth access; verify the
+  new backup folder with the currently installed token before considering
+  owner-approved three-folder consent and a separate candidate token.
+  The backup timer remains inert without its manual enable marker.
 - Authentication is **team-key only** on the new source; legacy password
   tables remain for rollback, but password issuance/login endpoints are removed.
   The private API binds `127.0.0.1:8091`; never expose this port directly.

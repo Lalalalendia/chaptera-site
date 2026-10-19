@@ -247,6 +247,58 @@ print("stage_sqlite_encrypted_tamper_rejected=PASS")
 print("live_translator_database_access=no")
 PY
 
+# RE-08 Google Picker: a NEW opt-in 3-folder authorization must preserve
+# the original 2-folder ReadEra path, without contacting Google or real SQLite.
+"$work/venv/bin/python" - <<'PY'
+from urllib.parse import parse_qs, urlencode, urlsplit
+from chaptera_server.drive_oauth_setup import (
+    DRIVE_FILE_SCOPE, DriveAuthorizationError, make_consent_request,
+    verify_callback,
+)
+source = "1daqCzEVgPdX639YV5otTLxgVTPbfeBEp"
+translated = "1X2ZP8Fzbnq5MEAWJyGSErVGGFkfGBrR9"
+backup = "1ll0rsERY7kpdMm8rQQVDAFcdx7_gihtl"
+redirect = "http://127.0.0.1:47952/oauth2callback"
+client_id = "offline-synthetic.apps.googleusercontent.com"
+kwargs = {"verifier": "v" * 60, "state": "staged-oauth-three-folders"}
+request = make_consent_request(
+    client_id, redirect, source, translated, backup_folder_id=backup,
+    **kwargs,
+)
+params = parse_qs(urlsplit(request.url).query)
+assert params["scope"] == [DRIVE_FILE_SCOPE]
+assert params["file_ids"] == [f"{source},{translated},{backup}"]
+def cb(selected):
+    return "/oauth2callback?" + urlencode({
+        "state": kwargs["state"], "code": "synthetic-code",
+        "picked_file_ids": selected,
+    })
+assert verify_callback(
+    cb(f"{backup},{translated},{source}"),
+    state=kwargs["state"], source_folder_id=source,
+    translation_folder_id=translated, backup_folder_id=backup,
+) == "synthetic-code"
+try:
+    verify_callback(
+        cb(f"{source},{translated}"),
+        state=kwargs["state"], source_folder_id=source,
+        translation_folder_id=translated, backup_folder_id=backup,
+    )
+except DriveAuthorizationError:
+    pass
+else:
+    raise AssertionError("Missing backup folder was accepted")
+legacy = make_consent_request(
+    client_id, redirect, source, translated, **kwargs,
+)
+assert parse_qs(urlsplit(legacy.url).query)["file_ids"] == [
+    f"{source},{translated}",
+]
+print("stage_drive_three_folder_picker=PASS")
+print("stage_drive_legacy_two_folder_picker=PASS")
+print("stage_drive_oauth_network_calls=0")
+PY
+
 # RE-08 Google Drive encrypted off-host backup: real wheel, ephemeral SQLite
 # and fake HTTPS OAuth/Drive only. Never open production SQLite or credentials.
 "$work/venv/bin/python" - "$work" <<'PY'
