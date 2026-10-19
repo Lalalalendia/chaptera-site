@@ -74,6 +74,17 @@ code and instructions, but a real `drive.file` picker consent must be
 performed by the Google account owner; neither GitHub CI nor ChatGPT's
 Drive connector can impersonate the ReadEra desktop OAuth grant.
 
+**OAuth longevity check:** Google documents that external OAuth consent
+screens in **Testing** generally produce a refresh token expiring in
+**7 days** for `drive.file` (see
+[Google OAuth 2.0 documentation](https://developers.google.com/identity/protocols/oauth2)).
+Before relying on unattended daily backups, the operator must verify that
+the existing OAuth client's publishing status and consent configuration
+allow durable refresh tokens. Never silently broaden scopes, rotate client
+IDs, or replace a token that still powers chapter exports. A single
+successful read-only probe does not prove a token will survive next week;
+monitor backup freshness and HTTP token failures after activation.
+
 ## Separate recovery keys — required before enabling
 
 There are **two distinct secrets**, neither of which may be placed in the Drive backup folder:
