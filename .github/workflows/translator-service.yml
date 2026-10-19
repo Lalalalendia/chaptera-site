@@ -38,16 +38,19 @@ on:
 permissions:
   contents: read
 
+# Pull-request builds are read-only and have no production SSH staging.
+# Cancel superseded commits on the SAME PR without blocking protected
+# main/manual production staging, which remains serialized and non-cancellable.
 concurrency:
-  group: chaptera-translator-private-service-deploy
-  cancel-in-progress: false
+  group: ${{ github.event_name == 'pull_request' && format('chaptera-translator-pr-{0}', github.event.pull_request.number) || 'chaptera-translator-private-service-deploy' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   build:
     runs-on: ubuntu-24.04
     timeout-minutes: 16
     env:
-      ARARRA_SHA: 4b82d3e081203832849cdbca75fce3a71302e8fd
+      ARARRA_SHA: 0ba63f5e24d3409df4a49f1aa2a630be5e782cdd
     steps:
       - uses: actions/checkout@v4
         with:
@@ -55,7 +58,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: Lalalalendia/ararra
-          ref: 4b82d3e081203832849cdbca75fce3a71302e8fd
+          ref: 0ba63f5e24d3409df4a49f1aa2a630be5e782cdd
           path: ararra
           persist-credentials: false
       - name: Verify exact Ararra version and protected main ancestry
@@ -70,6 +73,13 @@ jobs:
           test -s ararra/src/chaptera_server/ops_backup.py
           test -s ararra/src/chaptera_server/ops_backup_crypto.py
           test -s ararra/src/chaptera_server/ops_backup_s3.py
+          # RE-08 vault escrow: recovered SQLite is not enough to recover
+          # moderator Gemini credentials without the original systemd master.
+          test -s ararra/src/chaptera_server/ops_backup_vault.py
+          test -s ararra/tests/test_ops_backup_vault_escrow.py
+          grep -Fq 'def verify_restored_vault(' ararra/src/chaptera_server/ops_backup_vault.py
+          grep -Fq 'def test_vault_witness_checks_all_projects_not_only_first(' ararra/tests/test_ops_backup_vault_escrow.py
+          grep -Fq 'RE-08-VAULT-ESCROW-01' ararra/docs/RE08_SQLITE_RECOVERY.md
           # RE-06 self-service keys must be in the PINNED upstream main.
           test -s ararra/src/chaptera_server/personal_gemini_keys.py
           test -s ararra/src/chaptera_server/member_gemini_provider.py
@@ -79,6 +89,17 @@ jobs:
           test -s ararra/src/chaptera_server/chapter_batches.py
           test -s ararra/src/chaptera_server/http/routers/batches.py
           test -s ararra/src/chaptera_server/web_ui/static/js/book-batch-view.mjs
+          # RE-E2E-01: a complete offline, zero-Gemini-cost vertical regression
+          # must ship with the exact release, not only in upstream main.
+          test -s ararra/tests/test_release_vertical_slice.py
+          grep -Fq 'def test_book_link_to_batch_to_draft_qa_and_both_export_boundaries' ararra/tests/test_release_vertical_slice.py
+          # RE-06C: fail-closed personal project budget with a live SQLite read
+          # under the same write transaction as each quota reservation.
+          test -s ararra/tests/test_project_daily_caps.py
+          grep -Fq 'def set_daily_cap(' ararra/src/chaptera_server/personal_gemini_keys.py
+          grep -Fq 'limit_reader=live_cap' ararra/src/chaptera_server/member_gemini_provider.py
+          grep -Fq 'con.execute("BEGIN IMMEDIATE")' ararra/src/chaptera_server/quota.py
+          grep -Fq 'def test_missing_cap_never_sends_and_lowered_limit_stops_cached_provider' ararra/tests/test_project_daily_caps.py
           # Drive is manual-only until owner OAuth and first real E2E acceptance.
           test -s ararra/src/chaptera_server/drive_export.py
           test -s ararra/src/chaptera_server/drive_oauth_setup.py
@@ -196,6 +217,11 @@ jobs:
             echo 'error=oauth_exposure_to_long_lived_service' >&2; exit 2
           fi
           bash -n deploy/translator/verify-staged-release.sh
+          # Regression against staging a worker that would run without the
+          # new Gemini budget or fail to verify independent vault escrow.
+          grep -Fq 'assert store.claim_next(require_personal_key=True) is None' deploy/translator/verify-staged-release.sh
+          grep -Fq 'stage_personal_gemini_vault_recovery=PASS' deploy/translator/verify-staged-release.sh
+          grep -Fq 'stage_personal_gemini_rpd_caps=PASS' deploy/translator/verify-staged-release.sh
           python -m py_compile deploy/translator/pilot-chapter-offline.py
           curl -fsSL --retry 3 -H 'Accept: application/vnd.github+json' \
             -H "Authorization: Bearer $GH_TOKEN" \
@@ -254,7 +280,7 @@ jobs:
     environment: production
     timeout-minutes: 9
     env:
-      ARARRA_SHA: 4b82d3e081203832849cdbca75fce3a71302e8fd
+      ARARRA_SHA: 0ba63f5e24d3409df4a49f1aa2a630be5e782cdd
     steps:
       - uses: actions/checkout@v4
         with:
@@ -302,6 +328,11 @@ jobs:
             echo 'error=oauth_exposure_to_long_lived_service' >&2; exit 2
           fi
           bash -n deploy/translator/verify-staged-release.sh
+          # Regression against staging a worker that would run without the
+          # new Gemini budget or fail to verify independent vault escrow.
+          grep -Fq 'assert store.claim_next(require_personal_key=True) is None' deploy/translator/verify-staged-release.sh
+          grep -Fq 'stage_personal_gemini_vault_recovery=PASS' deploy/translator/verify-staged-release.sh
+          grep -Fq 'stage_personal_gemini_rpd_caps=PASS' deploy/translator/verify-staged-release.sh
           python -m py_compile deploy/translator/pilot-chapter-offline.py
       - name: Configure pinned SSH identity
         env:
