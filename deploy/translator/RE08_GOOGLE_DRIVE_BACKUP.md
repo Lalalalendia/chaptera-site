@@ -17,6 +17,63 @@
 
 The job does **not** auto-sync book edits, translate anything, call Gemini or modify permanent services. Google Drive must not be regarded as immutable storage: both existing shared-folder principals can manage content. No automatic Drive deletion/retention is implemented. Monitor quota usage and protect the account against unauthorized deletion.
 
+## ReadEra OAuth access to the backup folder — owner-only, read-only first
+
+Google's [Drive `drive.file` scope](https://developers.google.com/workspace/drive/api/guides/api-specific-auth)
+is per-file, not access to every file that the Google account can see. The
+[desktop Google Picker](https://developers.google.com/workspace/drive/picker/guides/desktop-mobile-picker)
+is the approved method for explicitly sharing specific folders with this
+desktop OAuth client. The ChatGPT Google Drive connection that created our
+new folder is separate from ReadEra's installed Desktop OAuth client.
+
+**Never replace the already working refresh token just to test this.**
+
+1. First try the existing VPS credentials with the **read-only**
+   `python -m chaptera_server.ops_backup_drive --probe-folder` command in
+   the protected transient systemd environment shown in step 4 below. If it
+   prints `drive_backup_folder_access=PASS`, no extra consent is needed.
+   If it rejects (for example HTTP 404/403), do **not** run any live backup.
+2. On the trusted Windows operator desktop with the new Ararra release
+   installed, verify the two original folder IDs and the backup folder ID.
+   To test whether the original **desktop token** already sees all three,
+   run PowerShell (owner's original token is not exported or overwritten):
+
+   ```powershell
+   .\scripts\connect-google-drive.ps1 -ClientJson 'C:\private\oauth-desktop.json' -IncludeBackupFolder -UseExistingToken -UseOriginalToken
+   ```
+
+   If this fails, perform explicit `drive.file` owner consent for
+   **all three** folders (original sources, original translations,
+   `Эрида/Резервные копии`), not just the newly added backup folder:
+
+   ```powershell
+   .\scripts\connect-google-drive.ps1 -ClientJson 'C:\private\oauth-desktop.json' -IncludeBackupFolder
+   ```
+
+   A **new** local candidate is created at
+   `%LOCALAPPDATA%\ReadEra\drive-owner-refresh-token-backup-candidate.txt`.
+   The original `drive-owner-refresh-token.txt` is left unchanged.
+   Re-running consent **never overwrites** the candidate. To recheck that
+   candidate without consent, use
+   `-IncludeBackupFolder -UseExistingToken` (without `-UseOriginalToken`).
+   ReadEra rejects callbacks missing any selected folder, duplicate IDs
+   or a folder outside this approved set.
+3. Consent and `drive-smoke --backup-folder-id` both check all three
+   folders through the **same** app OAuth token and never create files in
+   backup-preflight mode. Keep the old VPS credential active until an operator
+   accepts candidate results on the same target account, securely stages the
+   new protected refresh token **out of band**, verifies that existing book
+   source/translation exports still work, and has a rollback plan. Creating
+   multiple Google refresh tokens can invalidate an old token when provider
+   limits are reached; always verify the existing token after migration.
+   Never include token bytes in screenshots, shell history, Notion, chat,
+   CI artifacts, or the Google backup folder.
+
+**This is not an automatic authorization process.** The repository contains
+code and instructions, but a real `drive.file` picker consent must be
+performed by the Google account owner; neither GitHub CI nor ChatGPT's
+Drive connector can impersonate the ReadEra desktop OAuth grant.
+
 ## Separate recovery keys — required before enabling
 
 There are **two distinct secrets**, neither of which may be placed in the Drive backup folder:
