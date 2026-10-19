@@ -17,6 +17,7 @@ on:
       - 'deploy/translator/chaptera-translator-backup-drive.service'
       - 'deploy/translator/chaptera-translator-backup-drive.timer'
       - 'deploy/translator/install-backup-drive-units.sh'
+      - 'deploy/translator/RE08_GOOGLE_DRIVE_BACKUP.md'
   pull_request:
     paths:
       - '.github/workflows/translator-service.yml'
@@ -32,6 +33,7 @@ on:
       - 'deploy/translator/chaptera-translator-backup-drive.service'
       - 'deploy/translator/chaptera-translator-backup-drive.timer'
       - 'deploy/translator/install-backup-drive-units.sh'
+      - 'deploy/translator/RE08_GOOGLE_DRIVE_BACKUP.md'
   workflow_dispatch:
     inputs:
       install:
@@ -237,6 +239,10 @@ jobs:
             echo 'error=oauth_exposure_to_long_lived_service' >&2; exit 2
           fi
           bash -n deploy/translator/verify-staged-release.sh
+          # The offline VPS stage must verify encryption and Google readback
+          # without real external Drive requests or production SQLite access.
+          grep -Fq 'stage_drive_encrypted_backup_roundtrip=PASS' deploy/translator/verify-staged-release.sh
+          grep -Fq 'stage_drive_backup_network_calls=0' deploy/translator/verify-staged-release.sh
           # Regression against staging a worker that would run without the
           # new Gemini budget or fail to verify independent vault escrow.
           grep -Fq 'assert store.claim_next(require_personal_key=True) is None' deploy/translator/verify-staged-release.sh
@@ -357,6 +363,10 @@ jobs:
             echo 'error=oauth_exposure_to_long_lived_service' >&2; exit 2
           fi
           bash -n deploy/translator/verify-staged-release.sh
+          # The offline VPS stage must verify encryption and Google readback
+          # without real external Drive requests or production SQLite access.
+          grep -Fq 'stage_drive_encrypted_backup_roundtrip=PASS' deploy/translator/verify-staged-release.sh
+          grep -Fq 'stage_drive_backup_network_calls=0' deploy/translator/verify-staged-release.sh
           # Regression against staging a worker that would run without the
           # new Gemini budget or fail to verify independent vault escrow.
           grep -Fq 'assert store.claim_next(require_personal_key=True) is None' deploy/translator/verify-staged-release.sh
