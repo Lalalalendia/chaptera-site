@@ -38,9 +38,12 @@ on:
 permissions:
   contents: read
 
+# Pull-request builds are read-only and have no production SSH staging.
+# Cancel superseded commits on the SAME PR without blocking protected
+# main/manual production staging, which remains serialized and non-cancellable.
 concurrency:
-  group: chaptera-translator-private-service-deploy
-  cancel-in-progress: false
+  group: ${{ github.event_name == 'pull_request' && format('chaptera-translator-pr-{0}', github.event.pull_request.number) || 'chaptera-translator-private-service-deploy' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   build:
