@@ -5,7 +5,7 @@ It never changes Reader binaries, Nginx, the landing, or the Reader database.
 
 ## Current release candidate — 19 October 2026 (not automatically installed)
 
-- **Source pin for CI and rootless VPS staging:** `ararra@1f23b4b6d78dddbd733ba971259b590d8af1d2dd`, package `0.6.2`.
+- **Source pin for CI and rootless VPS staging:** `ararra@0ba63f5e24d3409df4a49f1aa2a630be5e782cdd`, package `0.6.2`.
   The GitHub Actions workflow, not this historical README, is the authoritative pin.
 - This pin includes [RE-E2E-01](https://github.com/Lalalalendia/ararra/pull/90):
   the offline, synthetic TOC → import → two-job batch → mock Gemini →
@@ -15,6 +15,15 @@ It never changes Reader binaries, Nginx, the landing, or the Reader database.
   each moderator's Gemini project must have an explicit local daily-request
   cap, checked atomically before a network attempt. Caps count calls rather
   than guaranteed billable tokens/charges. A missing cap blocks sending.
+- The pin also includes [RE-08 vault escrow witness](https://github.com/Lalalalendia/ararra/pull/91):
+  a **read-only** verification of saved personal Gemini keys against the
+  independently recovered original Base64 systemd `gemini_vault_key`.
+  A recovery of `.rbe` using the unrelated binary backup-encryption key
+  alone cannot re-enable encrypted personal Gemini API credentials.
+  The tool fails closed on a wrong/missing master, an empty project vault,
+  invalid private key permissions and any corrupted stored project.
+  It must run only on an **offline restored SQLite candidate**, not production.
+  This is a code/recovery-test gate, not evidence of an off-host backup.
 - Authentication is **team-key only** on the new source; legacy password
   tables remain for rollback, but password issuance/login endpoints are removed.
   The private API binds `127.0.0.1:8091`; never expose this port directly.
