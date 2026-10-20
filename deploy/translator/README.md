@@ -5,8 +5,9 @@ It never changes Reader binaries, Nginx, the landing, or the Reader database.
 
 ## Current release candidate — 20 October 2026 (not automatically installed)
 
-- **Source pin for CI and rootless VPS staging:** `ararra@47536321ae438262867adb76aab51b16ef9441c3`, package `0.6.2`.
+- **Source pin for CI and rootless VPS staging:** `ararra@ed9f0d2cf238b92944d2b0c82a462a3d041e6a4d`, package `0.6.2`.
   The GitHub Actions workflow, not this historical README, is the authoritative pin.
+- **RE-02 first-pilot candidate:** merged Ararra [#100](https://github.com/Lalalalendia/ararra/pull/100) and [#101](https://github.com/Lalalalendia/ararra/pull/101) add typed TOC selections and UUID-scoped one-shot source collection. The stage verifies synthetic one-shot source fetching against an **isolated temporary SQLite DB** without network access or production file mutation. Neither the continuous `source-worker` unit nor paid Gemini/Drive actions are enabled by this stage. A real live pilot remains gated by Ararra #65 (site permission/robots/TLS) and #83 (VPS memory, disk, backup/restore).
 - This pin includes [RE-E2E-01](https://github.com/Lalalalendia/ararra/pull/90):
   the offline, synthetic TOC → import → two-job batch → mock Gemini →
   diagnostic QA → offline Drive mock → verified TXT recovery test.

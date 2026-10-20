@@ -137,6 +137,70 @@ print("stage_drive_network_calls=0")
 print("production_drive_credentials_read=no")
 PY
 
+# RE-02: packaged one-shot source worker, offline in a disposable SQLite DB.
+# The real TLS/robots fetcher and production queue are intentionally untouched.
+env -u CHAPTERA_GEMINI_API_KEY -u CREDENTIALS_DIRECTORY \
+  "$work/venv/bin/python" - "$work" <<'PY'
+import asyncio
+from pathlib import Path
+import subprocess
+import sys
+
+from chaptera_server.source_collect import catalog_from_html
+from chaptera_server.source_job_store import SourceJobStore
+from chaptera_server.source_job_worker import SourceCollectionWorker
+from chaptera_server.storage import QueueStore
+
+root = Path(sys.argv[1])
+book = "https://www.royalroad.com/fiction/142007/aura"
+toc = '<div id="chapters">' + "".join(
+    f'<a href="/fiction/142007/aura/chapter/{60000+i}/{i}-part">'
+    f'Chapter {i} - Offline fixture</a>'
+    for i in (1, 2, 3)
+) + "</div>"
+catalog = catalog_from_html("royalroad", book, toc)
+assert len(catalog.chapters) == 3
+assert all(c.entry_type == "chapter" for c in catalog.chapters)
+jobs = SourceJobStore(QueueStore(root / "disposable-source-pilot.sqlite3"))
+untouched = jobs.create("other-operator", "offline-cat-1", catalog, [1, 2])
+target = jobs.create("pilot-operator", "offline-cat-2", catalog, [3])
+
+class OfflineSourceOnly:
+    def __init__(self):
+        self.calls = []
+    async def fetch(self, source, url):
+        assert source == "royalroad"
+        self.calls.append(url)
+        assert url.endswith("/60003/3-part")
+        return ('<div class="chapter-content"><p>'
+                + ("Permitted synthetic test body. " * 12)
+                + '</p></div>')
+
+fetcher = OfflineSourceOnly()
+worker = SourceCollectionWorker(jobs, fetcher)
+assert asyncio.run(worker.run_once(only_job_id=target["job_id"])) is True
+assert jobs.get("pilot-operator", target["job_id"])["completed"] == 1
+assert jobs.get("pilot-operator", target["job_id"])["status"] == "complete"
+assert jobs.get("other-operator", untouched["job_id"])["completed"] == 0
+assert jobs.get("other-operator", untouched["job_id"])["status"] == "queued"
+assert len(fetcher.calls) == 1
+assert asyncio.run(worker.run_once(only_job_id=target["job_id"])) is False
+assert len(fetcher.calls) == 1
+
+cli = Path(sys.executable).with_name("chaptera-server")
+for args in (("source-worker", "--run-once"),
+             ("source-worker", "--run-once", "--job-id", "not-uuid")):
+    probe = subprocess.run([str(cli), *args], capture_output=True,
+                           text=True, timeout=15, check=False)
+    assert probe.returncode == 2, (args, probe.returncode)
+print("stage_source_one_shot_actor_isolation=PASS")
+print("stage_source_one_shot_checkpoint=PASS")
+print("stage_source_one_shot_cli_failclosed=PASS")
+print("stage_source_network_calls=0")
+print("live_source_jobs_claimed=0")
+print("production_sqlite_access=no")
+PY
+
 # Check the bundled SQLite recovery tool against disposable, NON-PRODUCTION
 # state on the actual VPS. The Reader database and translator state are untouched.
 "$work/venv/bin/python" - "$work" <<'PY'
