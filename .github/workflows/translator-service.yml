@@ -258,6 +258,12 @@ jobs:
           grep -Fq 'assert store.claim_next(require_personal_key=True) is None' deploy/translator/verify-staged-release.sh
           grep -Fq 'stage_personal_gemini_vault_recovery=PASS' deploy/translator/verify-staged-release.sh
           grep -Fq 'stage_personal_gemini_rpd_caps=PASS' deploy/translator/verify-staged-release.sh
+          # RE-02 first-pilot acceptance must remain synthetic and isolated.
+          grep -Fq 'stage_source_one_shot_actor_isolation=PASS' deploy/translator/verify-staged-release.sh
+          grep -Fq 'stage_source_one_shot_checkpoint=PASS' deploy/translator/verify-staged-release.sh
+          grep -Fq 'stage_source_one_shot_cli_failclosed=PASS' deploy/translator/verify-staged-release.sh
+          grep -Fq 'stage_source_network_calls=0' deploy/translator/verify-staged-release.sh
+          grep -Fq 'production_sqlite_access=no' deploy/translator/verify-staged-release.sh
           python -m py_compile deploy/translator/pilot-chapter-offline.py
           curl -fsSL --retry 3 -H 'Accept: application/vnd.github+json' \
             -H "Authorization: Bearer $GH_TOKEN" \
