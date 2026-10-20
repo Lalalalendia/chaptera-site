@@ -29,6 +29,36 @@ translator-service.yml and bootstrap-host.sh stay unchanged.
    OAuth, no API listener. The unit enforces MemoryHigh=112M,
    MemoryMax=160M, CPUQuota=35%, TasksMax=48, no new privileges.
 
+## Preferred first acceptance: one chapter, no systemd activation
+
+After the pinned Ararra release has passed CI and the rootless VPS stage,
+do **not** install or enable the continuous worker merely to prove one
+chapter. Use the dedicated, bounded CLI supplied by Ararra PR #101.
+This still requires a reviewed backup/restore, memory and disk headroom,
+site terms/robots/TLS acceptance and explicit authorization to collect
+the selected chapter. In particular, Royal Road's robot allowance alone
+does not satisfy the site's scraping/crawling permission requirement.
+
+An operator must first create an actor-owned, single-chapter source job
+through the authenticated UI. Inspect its job UUID and source terms.
+Only then, on the operator-controlled host (never in GitHub Actions):
+
+~~~bash
+# Run as the existing unprivileged translator service account.
+# $SOURCE_JOB_ID is the exact canonical UUID already verified in the UI.
+cd /var/lib/chaptera-translator
+runuser -u chaptera-translator -- env \
+  CHAPTERA_DB_PATH=/var/lib/chaptera-translator/jobs.sqlite3 \
+  /opt/chaptera-translator/current/venv/bin/chaptera-server \
+  source-worker --run-once --job-id "$SOURCE_JOB_ID"
+~~~
+
+The SQL claim is restricted to that one ID and attempts at most one item.
+A non-ready ID exits without substituting another queued moderator job.
+Inspect the checkpoint, status, hash and final manual import afterward.
+There is no Gemini request, service activation or automatic library commit.
+Keep `source-collection-enabled` absent until separate bulk-service approval.
+
 ## Reviewed manual installation; NOT during normal application deployment
 
 After all of the above: copy the **reviewed** GitHub unit to
