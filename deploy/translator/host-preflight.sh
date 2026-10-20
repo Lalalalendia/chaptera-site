@@ -101,7 +101,7 @@ fi
 # and off-host backup success cannot be inferred from local service status.
 printf 'source_pilot_schema=readera.source-pilot.readiness.v1\n'
 printf 'source_pilot_memory_floor_mib=512\n'
-printf 'source_pilot_disk_floor_mib=5120\n'
+printf 'source_pilot_disk_floor_mib=1536\n'\nprintf 'source_bulk_disk_floor_mib=5120\n'
 memory_mib=''
 if test -r /proc/meminfo; then
   memory_mib="$(awk '$1 == "MemAvailable:" {printf "%d", $2/1024; exit}' /proc/meminfo)"
@@ -125,15 +125,22 @@ if test -d "$state_dir"; then
 fi
 if [[ "$disk_mib" =~ ^[0-9]+$ ]]; then
   printf 'source_pilot_state_disk_available_mib=%s\n' "$disk_mib"
-  if (( disk_mib >= 5120 )); then
+  if (( disk_mib >= 1536 )); then
     disk_gate=pass
   else
     disk_gate=hold
   fi
+  if (( disk_mib >= 5120 )); then
+    bulk_disk_gate=pass
+  else
+    bulk_disk_gate=hold
+  fi
 else
   disk_gate=unknown
+  bulk_disk_gate=unknown
 fi
 printf 'source_pilot_disk_gate=%s\n' "$disk_gate"
+printf 'source_bulk_disk_gate=%s\n' "$bulk_disk_gate"
 
 # Include a non-secret exact commit only if an installed release already
 # provides the validated SOURCE_SHA marker. Staged releases are not installed.
@@ -178,6 +185,12 @@ if [[ "$memory_gate" == pass && "$disk_gate" == pass &&
   printf 'source_pilot_host_resource_gate=pass\n'
 else
   printf 'source_pilot_host_resource_gate=hold\n'
+fi
+if [[ "$memory_gate" == pass && "$bulk_disk_gate" == pass &&
+      "$collector_state" == inactive_or_absent ]]; then
+  printf 'source_bulk_host_resource_gate=pass\n'
+else
+  printf 'source_bulk_host_resource_gate=hold\n'
 fi
 # Off-host ciphertext existence and independently restorable keys must
 # be verified separately. A green host probe never clears the backup gate.
