@@ -197,4 +197,66 @@ fi
 printf 'source_pilot_offhost_restore_gate=not_assessed\n'
 printf 'source_pilot_live_site_authorization_gate=not_assessed\n'
 printf 'source_pilot_no_mutations=yes\n'
+# RUST-MIGRATION-01: ACTUAL resident memory of Python API and worker.
+# No process command line, environment, secrets, source text or PID logged.
+printf 'rust_baseline_schema=erida.python-process-memory.v1\n'
+for spec in api:chaptera-translator-api.service worker:chaptera-translator-worker.service; do
+  label="\${spec%%:*}"
+  unit="\${spec#*:}"
+  pid=''
+  if command -v systemctl >/dev/null 2>&1; then
+    pid="$(systemctl show -p MainPID --value "$unit" 2>/dev/null || true)"
+  fi
+  status=not_running
+  rss=unknown
+  pss=unknown
+  hwm=unknown
+  cgroup_current=unknown
+  cgroup_peak=unknown
+  if [[ "$pid" =~ ^[1-9][0-9]*$ ]] && test -r "/proc/$pid/status"; then
+    status=active
+    if command -v ps >/dev/null 2>&1; then
+      rss_kib="$(ps -o rss= -p "$pid" 2>/dev/null | tr -d ' ' || true)"
+      if [[ "$rss_kib" =~ ^[0-9]+$ ]]; then
+        rss="$(( (rss_kib + 1023) / 1024 ))"
+      fi
+    fi
+    peak_kib="$(awk '$1 == "VmHWM:" {print $2;exit}' "/proc/$pid/status" 2>/dev/null || true)"
+    if [[ "$peak_kib" =~ ^[0-9]+$ ]]; then
+      hwm="$(( (peak_kib + 1023) / 1024 ))"
+    fi
+    if test -r "/proc/$pid/smaps_rollup"; then
+      pss_kib="$(awk '$1 == "Pss:" {print $2;exit}' "/proc/$pid/smaps_rollup" 2>/dev/null || true)"
+      if [[ "$pss_kib" =~ ^[0-9]+$ ]]; then
+        pss="$(( (pss_kib + 1023) / 1024 ))"
+      fi
+    fi
+    if command -v systemctl >/dev/null 2>&1; then
+      group="$(systemctl show -p ControlGroup --value "$unit" 2>/dev/null || true)"
+      if [[ "$group" == /* && "$group" != *'..'* ]]; then
+        for name in current peak; do
+          path="/sys/fs/cgroup\${group}/memory.\${name}"
+          if test -r "$path"; then
+            bytes="$(cat "$path" 2>/dev/null || true)"
+            if [[ "$bytes" =~ ^[0-9]+$ ]]; then
+              value="$(( (bytes + 1048575) / 1048576 ))"
+              if [[ "$name" == current ]]; then
+                cgroup_current="$value"
+              else
+                cgroup_peak="$value"
+              fi
+            fi
+          fi
+        done
+      fi
+    fi
+  fi
+  printf 'rust_baseline_%s_state=%s\n' "$label" "$status"
+  printf 'rust_baseline_%s_rss_mib=%s\n' "$label" "$rss"
+  printf 'rust_baseline_%s_pss_mib=%s\n' "$label" "$pss"
+  printf 'rust_baseline_%s_hwm_mib=%s\n' "$label" "$hwm"
+  printf 'rust_baseline_%s_cgroup_current_mib=%s\n' "$label" "$cgroup_current"
+  printf 'rust_baseline_%s_cgroup_peak_mib=%s\n' "$label" "$cgroup_peak"
+done
+printf 'rust_baseline_no_mutations=yes\n'
 printf 'preflight_completed=yes\n'
