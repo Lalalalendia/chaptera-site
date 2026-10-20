@@ -31,7 +31,9 @@ jobs:
           bash -n deploy/translator/host-preflight.sh
           ! grep -Eq '(^|[[:space:]])(apt|apt-get|pip|docker[[:space:]]+(run|pull)|rm|mv|cp|mkdir|systemctl[[:space:]]+(enable|start|restart|stop)|sudo[[:space:]]+(bash|sh))([[:space:]]|$)' deploy/translator/host-preflight.sh
           grep -Fq 'source_pilot_memory_floor_mib=512' deploy/translator/host-preflight.sh
-          grep -Fq 'source_pilot_disk_floor_mib=5120' deploy/translator/host-preflight.sh
+          grep -Fq 'source_pilot_disk_floor_mib=1536' deploy/translator/host-preflight.sh
+          grep -Fq 'source_bulk_disk_floor_mib=5120' deploy/translator/host-preflight.sh
+          grep -Fq 'source_bulk_host_resource_gate=' deploy/translator/host-preflight.sh
           grep -Fq 'source_pilot_persistent_collector=' deploy/translator/host-preflight.sh
           grep -Fq 'source_pilot_offhost_restore_gate=not_assessed' deploy/translator/host-preflight.sh
           grep -Fq 'source_pilot_no_mutations=yes' deploy/translator/host-preflight.sh
