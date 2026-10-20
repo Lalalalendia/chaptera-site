@@ -201,8 +201,8 @@ printf 'source_pilot_no_mutations=yes\n'
 # No process command line, environment, secrets, source text or PID logged.
 printf 'rust_baseline_schema=erida.python-process-memory.v1\n'
 for spec in api:chaptera-translator-api.service worker:chaptera-translator-worker.service; do
-  label="\${spec%%:*}"
-  unit="\${spec#*:}"
+  label="${spec%%:*}"
+  unit="${spec#*:}"
   pid=''
   if command -v systemctl >/dev/null 2>&1; then
     pid="$(systemctl show -p MainPID --value "$unit" 2>/dev/null || true)"
@@ -235,7 +235,7 @@ for spec in api:chaptera-translator-api.service worker:chaptera-translator-worke
       group="$(systemctl show -p ControlGroup --value "$unit" 2>/dev/null || true)"
       if [[ "$group" == /* && "$group" != *'..'* ]]; then
         for name in current peak; do
-          path="/sys/fs/cgroup\${group}/memory.\${name}"
+          path="/sys/fs/cgroup${group}/memory.${name}"
           if test -r "$path"; then
             bytes="$(cat "$path" 2>/dev/null || true)"
             if [[ "$bytes" =~ ^[0-9]+$ ]]; then
