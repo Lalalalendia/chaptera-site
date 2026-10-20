@@ -96,4 +96,92 @@ if command -v curl >/dev/null 2>&1; then
     printf 'gemini_tls_endpoint=unreachable_or_blocked\n'
   fi
 fi
+# RE-02 source collection: resources-only pilot evidence. This is deliberately
+# read-only: no SQLite content or recovery key is accessed, no site is fetched,
+# and off-host backup success cannot be inferred from local service status.
+printf 'source_pilot_schema=readera.source-pilot.readiness.v1\n'
+printf 'source_pilot_memory_floor_mib=512\n'
+printf 'source_pilot_disk_floor_mib=5120\n'
+memory_mib=''
+if test -r /proc/meminfo; then
+  memory_mib="$(awk '$1 == "MemAvailable:" {printf "%d", $2/1024; exit}' /proc/meminfo)"
+fi
+if [[ "$memory_mib" =~ ^[0-9]+$ ]]; then
+  printf 'source_pilot_memavailable_mib=%s\n' "$memory_mib"
+  if (( memory_mib >= 512 )); then
+    memory_gate=pass
+  else
+    memory_gate=hold
+  fi
+else
+  memory_gate=unknown
+fi
+printf 'source_pilot_memory_gate=%s\n' "$memory_gate"
+
+state_dir=/var/lib/chaptera-translator
+disk_mib=''
+if test -d "$state_dir"; then
+  disk_mib="$(df -Pm -- "$state_dir" 2>/dev/null | awk 'NR == 2 {print $4}' || true)"
+fi
+if [[ "$disk_mib" =~ ^[0-9]+$ ]]; then
+  printf 'source_pilot_state_disk_available_mib=%s\n' "$disk_mib"
+  if (( disk_mib >= 5120 )); then
+    disk_gate=pass
+  else
+    disk_gate=hold
+  fi
+else
+  disk_gate=unknown
+fi
+printf 'source_pilot_disk_gate=%s\n' "$disk_gate"
+
+# Include a non-secret exact commit only if an installed release already
+# provides the validated SOURCE_SHA marker. Staged releases are not installed.
+installed_source=/opt/chaptera-translator/current/SOURCE_SHA
+if test -r "$installed_source"; then
+  installed_sha="$(head -n 1 -- "$installed_source" 2>/dev/null || true)"
+  if [[ "$installed_sha" =~ ^[a-f0-9]{40}$ ]]; then
+    printf 'source_pilot_installed_ararra_sha=%s\n' "$installed_sha"
+  else
+    printf 'source_pilot_installed_ararra_sha=unverified\n'
+  fi
+else
+  printf 'source_pilot_installed_ararra_sha=unavailable\n'
+fi
+
+if command -v systemctl >/dev/null 2>&1; then
+  if systemctl is-active --quiet chaptera-translator-source-worker.service 2>/dev/null; then
+    collector_state=active
+  else
+    collector_state=inactive_or_absent
+  fi
+  if systemctl is-active --quiet chaptera-translator-backup-drive.timer 2>/dev/null; then
+    backup_timer_state=active
+  else
+    backup_timer_state=inactive_or_absent
+  fi
+  if systemctl is-enabled --quiet chaptera-translator-backup-drive.timer 2>/dev/null; then
+    backup_timer_enabled=yes
+  else
+    backup_timer_enabled=no_or_inaccessible
+  fi
+else
+  collector_state=unknown
+  backup_timer_state=unknown
+  backup_timer_enabled=unknown
+fi
+printf 'source_pilot_persistent_collector=%s\n' "$collector_state"
+printf 'source_pilot_backup_timer=%s\n' "$backup_timer_state"
+printf 'source_pilot_backup_timer_enabled=%s\n' "$backup_timer_enabled"
+if [[ "$memory_gate" == pass && "$disk_gate" == pass &&
+      "$collector_state" == inactive_or_absent ]]; then
+  printf 'source_pilot_host_resource_gate=pass\n'
+else
+  printf 'source_pilot_host_resource_gate=hold\n'
+fi
+# Off-host ciphertext existence and independently restorable keys must
+# be verified separately. A green host probe never clears the backup gate.
+printf 'source_pilot_offhost_restore_gate=not_assessed\n'
+printf 'source_pilot_live_site_authorization_gate=not_assessed\n'
+printf 'source_pilot_no_mutations=yes\n'
 printf 'preflight_completed=yes\n'
