@@ -5,10 +5,12 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/translator-host-preflight.yml'
+      - '.github/workflows/translator-service.yml'
       - 'deploy/translator/host-preflight.sh'
   pull_request:
     paths:
       - '.github/workflows/translator-host-preflight.yml'
+      - '.github/workflows/translator-service.yml'
       - 'deploy/translator/host-preflight.sh'
   workflow_dispatch:
 
