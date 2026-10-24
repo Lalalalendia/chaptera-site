@@ -1,0 +1,53 @@
+[Unit]
+Description=ReadEra consented-batch Drive TXT exporter (inert one-shot)
+Wants=network-online.target
+After=network-online.target
+ConditionPathExists=/opt/chaptera-translator/current/venv/bin/chaptera-server
+ConditionPathExists=/etc/chaptera-translator/mvp-drive-export-enabled
+ConditionPathExists=!/etc/chaptera-translator/drive-export-enabled
+ConditionPathExists=/etc/chaptera-translator/drive-export.env
+RequiresMountsFor=/var/lib/chaptera-translator
+StartLimitIntervalSec=90
+StartLimitBurst=3
+
+[Service]
+Type=oneshot
+User=chaptera-translator
+Group=chaptera-translator
+WorkingDirectory=/var/lib/chaptera-translator
+Environment=CHAPTERA_DB_PATH=/var/lib/chaptera-translator/jobs.sqlite3
+Environment=CHAPTERA_DRIVE_SOURCE_FOLDER_ID=1daqCzEVgPdX639YV5otTLxgVTPbfeBEp
+Environment=CHAPTERA_DRIVE_TRANSLATION_FOLDER_ID=1X2ZP8Fzbnq5MEAWJyGSErVGGFkfGBrR9
+# Operator-selected approved shared parent; file is root-owned and persists across releases.
+EnvironmentFile=/etc/chaptera-translator/drive-export.env
+Environment=PYTHONDONTWRITEBYTECODE=1
+# Root-owned Google OAuth lives OUTSIDE releases and stays across deployments.
+# The long-lived API and Gemini worker never receive these three credentials.
+LoadCredential=google_drive_client_id:/etc/chaptera-translator/google-drive/google_drive_client_id
+LoadCredential=google_drive_client_secret:/etc/chaptera-translator/google-drive/google_drive_client_secret
+LoadCredential=google_drive_refresh_token:/etc/chaptera-translator/google-drive/google_drive_refresh_token
+ExecStart=/opt/chaptera-translator/current/venv/bin/chaptera-server drive-outbox --run-once --allow-drive-write --consented-only
+Restart=no
+TimeoutStartSec=600s
+StateDirectory=chaptera-translator
+StateDirectoryMode=0700
+UMask=0077
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectControlGroups=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+CapabilityBoundingSet=
+AmbientCapabilities=
+MemoryAccounting=yes
+MemoryHigh=112M
+MemoryMax=160M
+TasksMax=32
+LimitNOFILE=2048
