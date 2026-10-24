@@ -1,0 +1,83 @@
+name: Validate inert consent-only Erida Drive exporter
+
+on:
+  pull_request:
+    paths:
+      - 'deploy/translator/chaptera-translator-mvp-drive-export.service'
+      - 'deploy/translator/chaptera-translator-mvp-drive-export.timer'
+      - 'deploy/translator/install-mvp-drive-export-units.sh'
+      - 'deploy/translator/MVP_DRIVE_HANDOFF.md'
+      - '.github/workflows/validate-mvp-drive-export-unit.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'deploy/translator/chaptera-translator-mvp-drive-export.service'
+      - 'deploy/translator/chaptera-translator-mvp-drive-export.timer'
+      - 'deploy/translator/install-mvp-drive-export-units.sh'
+      - 'deploy/translator/MVP_DRIVE_HANDOFF.md'
+      - '.github/workflows/validate-mvp-drive-export-unit.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  inert-consented-timer:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Verify consent-only selector and frozen installer
+        shell: bash
+        run: |
+          set -euo pipefail
+          dir=deploy/translator
+          unit="$dir/chaptera-translator-mvp-drive-export.service"
+          timer="$dir/chaptera-translator-mvp-drive-export.timer"
+          installer="$dir/install-mvp-drive-export-units.sh"
+          for file in "$unit" "$timer" "$installer" "$dir/MVP_DRIVE_HANDOFF.md"; do
+            test -s "$file"
+          done
+          bash -n "$installer"
+          grep -Fxq 'User=chaptera-translator' "$unit"
+          grep -Fxq 'Group=chaptera-translator' "$unit"
+          grep -Fxq 'Environment=CHAPTERA_DB_PATH=/var/lib/chaptera-translator/jobs.sqlite3' "$unit"
+          grep -Fxq 'ConditionPathExists=/etc/chaptera-translator/mvp-drive-export-enabled' "$unit"
+          grep -Fxq 'ConditionPathExists=!/etc/chaptera-translator/drive-export-enabled' "$unit"
+          grep -Fxq 'ConditionPathExists=/etc/chaptera-translator/drive-export.env' "$unit"
+          grep -Fxq 'EnvironmentFile=/etc/chaptera-translator/drive-export.env' "$unit"
+          grep -Fxq 'LoadCredential=google_drive_client_id:/etc/chaptera-translator/google-drive/google_drive_client_id' "$unit"
+          grep -Fxq 'LoadCredential=google_drive_client_secret:/etc/chaptera-translator/google-drive/google_drive_client_secret' "$unit"
+          grep -Fxq 'LoadCredential=google_drive_refresh_token:/etc/chaptera-translator/google-drive/google_drive_refresh_token' "$unit"
+          grep -Fxq 'ExecStart=/opt/chaptera-translator/current/venv/bin/chaptera-server drive-outbox --run-once --allow-drive-write --consented-only' "$unit"
+          grep -Fxq 'NoNewPrivileges=yes' "$unit"
+          grep -Fxq 'ProtectSystem=strict' "$unit"
+          grep -Fxq 'MemoryMax=160M' "$unit"
+          grep -Fxq 'Persistent=false' "$timer"
+          grep -Fxq 'OnCalendar=*-*-* *:0/2:00' "$timer"
+          grep -Fq 'legacy_drive_export_timer_must_be_disabled' "$installer"
+          grep -Fq 'systemctl daemon-reload' "$installer"
+          if grep -Eq 'systemctl[[:space:]]+(enable|start|restart|preset)' "$installer"; then
+            echo 'error=installer_must_not_activate_drive' >&2
+            exit 2
+          fi
+          if grep -Eq '^(ExecStart=.* (serve|worker)$|Environment=CHAPTERA_(GEMINI|TEAM))' "$unit"; then
+            echo 'error=never_distribute_credentials_to_other_services' >&2
+            exit 2
+          fi
+          git diff --name-only origin/main...HEAD > "$RUNNER_TEMP/changed.txt"
+          if grep -Eq '^deploy/translator/(bootstrap-host.sh|install-release.sh|chaptera-translator-api.service|chaptera-translator-worker.service|chaptera-translator-drive-export.service|chaptera-translator-drive-export.timer)$' "$RUNNER_TEMP/changed.txt"; then
+            echo 'error=existing_production_services_must_remain_untouched' >&2
+            exit 2
+          fi
+      - name: Parse systemd unit syntax using a local stub (no services enabled)
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo install -d /opt/chaptera-translator/current/venv/bin
+          sudo install -m 0755 /usr/bin/true /opt/chaptera-translator/current/venv/bin/chaptera-server
+          systemd-analyze verify deploy/translator/chaptera-translator-mvp-drive-export.service
+          systemd-analyze verify deploy/translator/chaptera-translator-mvp-drive-export.timer
+          echo 'mvp_drive_unit_syntax=PASS'
