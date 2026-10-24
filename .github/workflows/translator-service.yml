@@ -58,7 +58,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 16
     env:
-      ARARRA_SHA: 8cffa23d6888963107900b63d1e63d1f7f9b0f84
+      ARARRA_SHA: 0b793ed1e8314abd0d286cb1cd9d7b1c11d3931e
     steps:
       - uses: actions/checkout@v4
         with:
@@ -66,7 +66,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: Lalalalendia/ararra
-          ref: 8cffa23d6888963107900b63d1e63d1f7f9b0f84
+          ref: 0b793ed1e8314abd0d286cb1cd9d7b1c11d3931e
           path: ararra
           persist-credentials: false
       - name: Verify exact Ararra version and protected main ancestry
@@ -124,6 +124,18 @@ jobs:
           grep -Fq 'drive-owner-refresh-token-backup-candidate.txt' ararra/scripts/connect-google-drive.ps1
           grep -Fq -- '--backup-folder-id' ararra/src/chaptera_server/cli.py
           test -s ararra/src/chaptera_server/drive_outbox.py
+          # RE-MVP: explicit user consent, chapter-level Drive handoff,
+          # readable TXT, and isolated 1/N chapter tests in the EXACT pin.
+          test -s ararra/src/chaptera_server/batch_drive_consent.py
+          test -s ararra/src/chaptera_server/chapter_plain_txt.py
+          test -s ararra/tests/test_mvp_file_to_drive.py
+          test -s ararra/tests/test_drive_export.py
+          grep -Fq 'drive_export_requested: bool = False' ararra/src/chaptera_server/http/schemas.py
+          grep -Fq 'def readable_txt(fragment: str)' ararra/src/chaptera_server/chapter_plain_txt.py
+          grep -Fq 'from .chapter_plain_txt import readable_txt' ararra/src/chaptera_server/drive_export.py
+          grep -Fq 'def test_one_uploaded_file_becomes_exactly_n_separate_drive_handoffs' ararra/tests/test_mvp_file_to_drive.py
+          grep -Fq 'def test_consented_batch_exports_n_actual_readable_txt_pairs_without_overwrite' ararra/tests/test_drive_export.py
+          grep -Fq -- '--consented-only' ararra/src/chaptera_server/cli.py
           # Required for one shared moderator/book/(source,translation) root.
           grep -Fq 'CHAPTERA_DRIVE_ROOT_FOLDER_ID' ararra/src/chaptera_server/cli.py
           grep -Fq 'readeraPartFolder' ararra/src/chaptera_server/drive_export.py
@@ -271,6 +283,9 @@ jobs:
           grep -Fq 'stage_drive_three_folder_picker=PASS' deploy/translator/verify-staged-release.sh
           grep -Fq 'stage_drive_legacy_two_folder_picker=PASS' deploy/translator/verify-staged-release.sh
           grep -Fq 'stage_drive_oauth_network_calls=0' deploy/translator/verify-staged-release.sh
+          grep -Fq 'stage_mvp_readable_chapter_txt=PASS' deploy/translator/verify-staged-release.sh
+          grep -Fq 'stage_mvp_gemini_network_calls=0' deploy/translator/verify-staged-release.sh
+          grep -Fq 'stage_mvp_drive_network_calls=0' deploy/translator/verify-staged-release.sh
           # Regression against staging a worker that would run without the
           # new Gemini budget or fail to verify independent vault escrow.
           grep -Fq 'assert store.claim_next(require_personal_key=True) is None' deploy/translator/verify-staged-release.sh
@@ -340,7 +355,7 @@ jobs:
     environment: production
     timeout-minutes: 9
     env:
-      ARARRA_SHA: 8cffa23d6888963107900b63d1e63d1f7f9b0f84
+      ARARRA_SHA: 0b793ed1e8314abd0d286cb1cd9d7b1c11d3931e
     steps:
       - uses: actions/checkout@v4
         with:
@@ -404,6 +419,9 @@ jobs:
           grep -Fq 'stage_drive_three_folder_picker=PASS' deploy/translator/verify-staged-release.sh
           grep -Fq 'stage_drive_legacy_two_folder_picker=PASS' deploy/translator/verify-staged-release.sh
           grep -Fq 'stage_drive_oauth_network_calls=0' deploy/translator/verify-staged-release.sh
+          grep -Fq 'stage_mvp_readable_chapter_txt=PASS' deploy/translator/verify-staged-release.sh
+          grep -Fq 'stage_mvp_gemini_network_calls=0' deploy/translator/verify-staged-release.sh
+          grep -Fq 'stage_mvp_drive_network_calls=0' deploy/translator/verify-staged-release.sh
           # Regression against staging a worker that would run without the
           # new Gemini budget or fail to verify independent vault escrow.
           grep -Fq 'assert store.claim_next(require_personal_key=True) is None' deploy/translator/verify-staged-release.sh

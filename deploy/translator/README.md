@@ -3,7 +3,29 @@
 This is a dedicated service deployment, **not** a public Chaptera site release.
 It never changes Reader binaries, Nginx, the landing, or the Reader database.
 
-## Current release candidate — 20 October 2026 (not automatically installed)
+## 25 October 2026 — ERIDA MVP staged candidate (not installed)
+
+- The build and isolated rootless stage now pin
+  `ararra@0b793ed1e8314abd0d286cb1cd9d7b1c11d3931e`, including merged [PR #144](https://github.com/Lalalalendia/ararra/pull/144).
+  The authoritative pin is `translator-service.yml`.
+- The source contains the user scenario: upload one TXT with 1..N chapters,
+  review chapter splitting, explicitly confirm Gemini, request per-chapter
+  Google Drive delivery and receive readable UTF-8 `Глава NNN.txt` rather
+  than literal HTML tags. Non-consented historical exports remain unchanged.
+- Pull requests run **offline build/testing only**. A push to site `main` may
+  upload a checksum-verified **incoming staged archive** to the VPS, but
+  cannot install/activate services without a separate manually authorized
+  `workflow_dispatch install=YES`. The *currently installed* VPS version
+  is not proven by this document.
+- The existing `chaptera-translator-drive-export.service` is a legacy
+  operator-wide selector; **do not enable it as the MVP consent-only exporter**
+  until an independently reviewed service explicitly selects
+  `--consented-only`. No service, OAuth credentials, shared Drive root,
+  production database, or remote files change in this source-only update.
+- Remaining launch gate: owner-approved root folder and isolated real
+  file→Gemini→Drive pilot with separate TXT and failure/retry checks.
+
+## Historical release candidate — 20 October 2026 (not automatically installed)
 
 - **Source pin for CI and rootless VPS staging:** `ararra@ed9f0d2cf238b92944d2b0c82a462a3d041e6a4d`, package `0.6.2`.
   The GitHub Actions workflow, not this historical README, is the authoritative pin.

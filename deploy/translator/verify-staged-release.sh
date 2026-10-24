@@ -137,6 +137,68 @@ print("stage_drive_network_calls=0")
 print("production_drive_credentials_read=no")
 PY
 
+# RE-MVP: verify the exact pinned wheel's user-consented export path using only
+# disposable SQLite. No production credentials, network or paid Gemini calls.
+env -u CHAPTERA_GEMINI_API_KEY -u CREDENTIALS_DIRECTORY \
+  "$work/venv/bin/python" - "$work" <<'PY'
+from pathlib import Path
+import sys
+from chaptera_server.chapter_plain_txt import readable_txt, PlainTxtError
+from chaptera_server.chapter_batches import TranslationBatches
+from chaptera_server.drive_outbox import DriveOutbox
+from chaptera_server.library import BookLibrary
+from chaptera_server.storage import QueueStore
+
+assert readable_txt("<h1>Глава 1</h1><p>原文<br/>第二行</p>") == (
+    "Глава 1\n\n原文\n第二行".encode("utf-8")
+)
+assert readable_txt("<p>Русский <strong>текст</strong>.</p>") == (
+    "Русский текст.".encode("utf-8")
+)
+try:
+    readable_txt("<script>unsafe</script>")
+except PlainTxtError:
+    pass
+else:
+    raise AssertionError("Unsupported HTML must not be dropped silently")
+db = QueueStore(Path(sys.argv[1]) / "disposable-mvp-drive-consent.sqlite3")
+lib = BookLibrary(db)
+lib.create_book("mvp-book", "Stage only", owner_member_id="operator", actor_id="operator")
+chapter = lib.put_chapter(
+    "mvp-book", "one", chapter_index=1, chapter_path="chapters/1.xhtml",
+    source_html="<p>原文</p>", expected_revision=0,
+)
+batches = TranslationBatches(db, lib)
+payload = {
+    "source_language": "Chinese", "target_language": "Russian",
+    "style_instructions": "", "transport": "html_v0", "max_attempts": 1,
+    "expected_glossary_revision": 0,
+    "chapters": [{"chapter_id": "one", "expected_source_revision": 1}],
+}
+preview = batches.preview("mvp-book", payload)
+assert preview["chapter_count"] == 1
+assert DriveOutbox(db).status()["enabled"] is False
+batch = batches.submit(
+    "mvp-book", {
+        **payload, "expected_manifest_sha256": preview["manifest_sha256"],
+        "drive_export_requested": True,
+    },
+    actor_id="operator", idempotency_key="mvp-staged-proof",
+)
+assert batch["drive_export_requested"] is True
+running = db.claim_next()
+assert running and running[0]["id"] == batch["chapters"][0]["job_id"]
+assert db.complete(running[0]["id"], running[1], "<p>Перевод</p>",
+                   chapter["source_hash"], 1)
+outbox = DriveOutbox(db)
+assert outbox.status()["enabled"] is False
+assert outbox.status()["pending"] == 1
+assert outbox.claim_next(consented_only=True) is None
+print("stage_mvp_readable_chapter_txt=PASS")
+print("stage_mvp_gemini_network_calls=0")
+print("stage_mvp_drive_network_calls=0")
+PY
+
 # RE-02: packaged one-shot source worker, offline in a disposable SQLite DB.
 # The real TLS/robots fetcher and production queue are intentionally untouched.
 env -u CHAPTERA_GEMINI_API_KEY -u CREDENTIALS_DIRECTORY \
