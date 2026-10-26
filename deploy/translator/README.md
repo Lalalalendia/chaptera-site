@@ -2,7 +2,7 @@
 
 ## 27 October 2026 — staging when private GitHub Actions minutes are exhausted
 
-The private \`chaptera-site\` repository cannot allocate GitHub-hosted runners
+The private `chaptera-site` repository cannot allocate GitHub-hosted runners
 while its included 2,000 Actions minutes are exhausted. A failed job with zero
 runner steps is not a failed source-code test. Do not repeatedly rerun it or
 weaken production release/backup guards to compensate.
@@ -11,30 +11,30 @@ A **stage-only, Actions-independent** path is available in this PR branch.
 On a trusted Linux / WSL2 workstation (Git, Python 3.12, SSH, curl, tar and
 outbound internet required), check out this branch and run:
 
-\`\`\`bash
+```bash
 bash deploy/translator/manual-stage-no-actions.sh chaptera-deploy@YOUR_VPS_HOST
-\`\`\`
+```
 
 The command reads the single agreed source SHA directly from the two
-\`ARARRA_SHA\` entries in this branch's \`translator-service.yml\` (currently
-\`0b793ed1e8314abd0d286cb1cd9d7b1c11d3931e\`). It refuses divergent
+`ARARRA_SHA` entries in this branch's `translator-service.yml` (currently
+`0b793ed1e8314abd0d286cb1cd9d7b1c11d3931e`). It refuses divergent
 pins, unproven/non-main commits, missing MVP consent/TXT modules, or missing
-VPS MVP smoke code. The latest \`ararra\` UI-only PR #145 is **not** included
+VPS MVP smoke code. The latest `ararra` UI-only PR #145 is **not** included
 until the release pin is explicitly updated and rechecked.
 
 The script uses the workstation's existing SSH identity and **previously
-verified** \`known_hosts\` entry. It never asks for, prints, exports or copies
+verified** `known_hosts` entry. It never asks for, prints, exports or copies
 SSH private keys, Google OAuth credentials, Gemini keys or server secrets.
 It runs Python tests, architecture validation, verified real-chapter offline
 mock, creates a SHA256-verified offline wheelhouse, transfers it to the
-deploy user's \`~/chaptera-translator-incoming/<SHA>/\`, and invokes the
-existing transient \`verify-staged-release.sh\` on the VPS.
+deploy user's `~/chaptera-translator-incoming/<SHA>/`, and invokes the
+existing transient `verify-staged-release.sh` on the VPS.
 
 **No install/restart/timer enable/production SQLite write/paid Gemini/Google
 Drive write is performed.** A successful stage is **not** a full Chromium CI
 replacement, genuine off-host backup recovery, or authority to deploy
 production. Those checks plus independent operator approval remain required
-before using the separately guarded \`install-release.sh\`. The production
+before using the separately guarded `install-release.sh`. The production
 runner must not be installed on this memory-constrained VPS.
 
 
