@@ -197,9 +197,9 @@ def main() -> None:
             assert unauth_read.status_code == 401, unauth_read.text
             original_read = await client.get(raw_endpoint, headers=headers)
             assert original_read.status_code == 200, original_read.text
-            assert original_read.json()["original_text"] == "原文九.\\n\\nАбзац два."
+            assert original_read.json()["original_text"] == "原文九.\n\nАбзац два."
             assert original_read.json()["working_text"] == (
-                "手工 исправленный текст.\\n\\nАбзац два."
+                "手工 исправленный текст.\n\nАбзац два."
             )
 
     with (
