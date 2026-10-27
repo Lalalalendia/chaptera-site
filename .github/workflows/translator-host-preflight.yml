@@ -47,6 +47,9 @@ jobs:
           grep -Fq 'source_pilot_no_mutations=yes' deploy/translator/host-preflight.sh
           grep -Fq 'rust_baseline_schema=erida.python-process-memory.v1' deploy/translator/host-preflight.sh
           grep -Fq 'rust_baseline_no_mutations=yes' deploy/translator/host-preflight.sh
+          grep -Fq 'archive_only_%s_unit=ready' deploy/translator/host-preflight.sh
+          grep -Fq 'archive_only_%s_unit=requires_bootstrap' deploy/translator/host-preflight.sh
+          grep -Fq 'systemctl show --property=Environment --value' deploy/translator/host-preflight.sh
 
   preflight:
     needs: validate
