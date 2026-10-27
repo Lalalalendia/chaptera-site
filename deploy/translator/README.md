@@ -1,5 +1,41 @@
 # Private Ararra translator deployment — VPS
 
+## 27 October 2026 — archive-only Erida candidate: no web parser
+
+**Owner decision:** site parsing remains in Full Cycle App; this VPS accepts
+`full_cycle_app.chapter_exchange` v1 ZIP and retains editing, book library,
+Gemini and consented Google Drive export. See upstream
+[ararra PR #157](https://github.com/Lalalalendia/ararra/pull/157) (currently
+Draft). **Do not switch the pinned source until #157 is merged with exact-head
+CI success; staging/installation remain blocked until other gates pass.**
+
+Both `chaptera-translator-api.service` and the separate translation worker
+are configured with `CHAPTERA_ARCHIVE_ONLY=1`. Build and manual staging use
+`CHAPTERA_ARCHIVE_ONLY_BUILD=1` to exclude web-crawler Python and browser
+modules from the wheel. All parser process entrypoints fail closed; the source
+collector systemd unit remains separately inactive. Existing source checkpoint
+tables and old book data are preserved, not deleted.
+
+In both stage paths, `verify-full-cycle-zip-offline.py` must verify the
+**installed** lean wheel: source modules absent, `/v1/source-books/*` unavailable,
+3-chapter desktop ZIP imported over real in-process HTTP API, original and
+working text preserved in disposable SQLite. The old crawler one-shot smoke
+is intentionally replaced by explicit archive-only fail-closed proof; other
+Gemini/Drive/SQLite/backup isolated acceptance checks stay in place. Installer
+additionally rejects an already active legacy source-worker service.
+
+Public Python 3.11/3.12 exact-head tests measured wheel size:
+454,872 bytes full vs 363,343 bytes archive-only, saving 91,529 bytes (20.1%
+of the wheel, **excluding dependencies**). The installed lean wheel passed
+ZIP preview and missing-crawler tests. This says nothing quantitative about
+live VPS RSS/PSS: the source-worker was already inactive and API memory must
+be remeasured under the same conditions before a resource claim.
+
+**Production status:** no new VPS stage, `install=YES`, service restart,
+OAuth/Google Drive write or user database changes from this candidate.
+Physical RAM limits, independently verified encrypted off-host backup and
+recovery, exact SHA, Reader health and rollback proof remain mandatory.
+
 ## 27 October 2026 — read-only VPS preflight without GitHub Actions
 
 Before attempting to stage anything, from a trusted Linux/WSL2 workstation
