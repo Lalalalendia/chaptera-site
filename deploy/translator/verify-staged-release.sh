@@ -11,6 +11,9 @@ sha="$1"
 slot="$HOME/chaptera-translator-incoming/$sha"
 packet="$slot/translator-wheelhouse.tar.gz"
 checksum="$slot/translator-wheelhouse.sha256"
+acceptance="$slot/STAGED_SMOKE_SHA256"
+# A failed or interrupted re-check must invalidate any previous acceptance.
+rm -f -- "$acceptance"
 [[ -f "$packet" && -f "$checksum" ]] || {
   echo 'error=staged_wheelhouse_missing' >&2
   exit 2
@@ -677,3 +680,13 @@ for item in report["results"]:
     print(f"real_chapter_{item['transport']}_offline=PASS")
 print("real_chapter_offline_probe=PASS")
 PY
+
+# Only after EVERY installed-wheel, ZIP, Gemini-mock, backup/restore,
+# OAuth and real-chapter offline check succeeds, emit an exact-packet receipt.
+# An install must reject missing/stale receipts even if the wheelhouse hashes.
+packet_digest="$(sha256sum "$packet" | awk '{print $1}')"
+receipt_temp="$slot/.stage-smoke-accepted.$$"
+printf '%s %s\n' "$sha" "$packet_digest" > "$receipt_temp"
+chmod 0600 "$receipt_temp"
+mv -f -- "$receipt_temp" "$acceptance"
+printf 'translator_stage_offline_acceptance=PASS\n'
