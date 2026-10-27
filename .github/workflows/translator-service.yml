@@ -58,7 +58,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 16
     env:
-      ARARRA_SHA: 0b793ed1e8314abd0d286cb1cd9d7b1c11d3931e
+      ARARRA_SHA: 1bc65fc4624e1539c402df465407ebcee38f651f
     steps:
       - uses: actions/checkout@v4
         with:
@@ -66,7 +66,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: Lalalalendia/ararra
-          ref: 0b793ed1e8314abd0d286cb1cd9d7b1c11d3931e
+          ref: 1bc65fc4624e1539c402df465407ebcee38f651f
           path: ararra
           persist-credentials: false
       - name: Verify exact Ararra version and protected main ancestry
@@ -136,6 +136,16 @@ jobs:
           grep -Fq 'def test_one_uploaded_file_becomes_exactly_n_separate_drive_handoffs' ararra/tests/test_mvp_file_to_drive.py
           grep -Fq 'def test_consented_batch_exports_n_actual_readable_txt_pairs_without_overwrite' ararra/tests/test_drive_export.py
           grep -Fq -- '--consented-only' ararra/src/chaptera_server/cli.py
+          # RE-02: Full Cycle App source ZIP is decoded by the manifest,
+          # never re-parsed by chapter-heading heuristics.
+          # Public Ararra CI must test both the importer and real exporter ZIP.
+          test -s ararra/src/chaptera_server/full_cycle_archive.py
+          test -s ararra/docs/RE02_FULL_CYCLE_ARCHIVE_IMPORT.md
+          test -s ararra/tests/test_full_cycle_archive_import.py
+          test -s ararra/tests/test_full_cycle_actual_exporter_compat.py
+          test -s ararra/tests/fixtures/full_cycle_actual_exporter_20261017.zip.b64
+          grep -Fq 'full_cycle_app.chapter_exchange' ararra/docs/RE02_FULL_CYCLE_ARCHIVE_IMPORT.md
+          grep -Fq 'test_actual_full_cycle_exporter_zip_preview_commit_and_raw_readback' ararra/tests/test_full_cycle_actual_exporter_compat.py
           # Required for one shared moderator/book/(source,translation) root.
           grep -Fq 'CHAPTERA_DRIVE_ROOT_FOLDER_ID' ararra/src/chaptera_server/cli.py
           grep -Fq 'readeraPartFolder' ararra/src/chaptera_server/drive_export.py
@@ -355,7 +365,7 @@ jobs:
     environment: production
     timeout-minutes: 9
     env:
-      ARARRA_SHA: 0b793ed1e8314abd0d286cb1cd9d7b1c11d3931e
+      ARARRA_SHA: 1bc65fc4624e1539c402df465407ebcee38f651f
     steps:
       - uses: actions/checkout@v4
         with:
