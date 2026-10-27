@@ -53,6 +53,17 @@ fi
 for name in chaptera-translator-api.service chaptera-translator-worker.service; do
   test -f "/etc/systemd/system/$name" || { echo "error=missing_$name" >&2; exit 3; }
 done
+# An existing, bootstrapped unit may predate the archive-only wheel.
+# A slim wheel cannot start in legacy full-mode: verify the *effective*
+# systemd environment before switching current or restarting anything.
+# The root-owned unit must be updated through a separately approved bootstrap.
+for name in chaptera-translator-api.service chaptera-translator-worker.service; do
+  effective_env="$(systemctl show --property=Environment --value "$name" 2>/dev/null || true)"
+  if [[ " $effective_env " != *" CHAPTERA_ARCHIVE_ONLY=1 "* ]]; then
+    echo "error=missing_archive_only_runtime_unit_$name" >&2
+    exit 3
+  fi
+done
 # The archive-only wheel intentionally does not contain source-worker code.
 # A previously enabled crawler must be stopped by an independently reviewed
 # administrative action; this deploy must never silently disable it.
