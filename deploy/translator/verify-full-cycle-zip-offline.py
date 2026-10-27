@@ -7,6 +7,7 @@ path; it never touches the running service, its database, Gemini or Drive.
 """
 from __future__ import annotations
 
+import asyncio
 import base64
 import hashlib
 import io
@@ -113,6 +114,109 @@ def main() -> None:
         assert readback["original_text"] == "原文九.\n\nАбзац два."
         assert readback["working_text"] == "手工 исправленный текст.\n\nАбзац два."
         assert readback["original_sha256"] != readback["working_sha256"]
+
+    # The stage must also prove the same operator-facing HTTP API the browser
+    # uses, not only the underlying importer. ASGITransport stays in-process:
+    # no listener, DNS, real site, OAuth token or production database.
+    import httpx
+    from chaptera_server.api import create_app
+    from chaptera_server.config import Settings
+
+    http_store = QueueStore(scratch / "full-cycle-http-disposable.sqlite3")
+    http_settings = Settings(
+        db_path=http_store.db_path,
+        team_tokens={
+            "chief": "offline-chief-fixture-only",
+            "operator": "offline-operator-fixture-only",
+            "other": "offline-other-fixture-only",
+        },
+        admin_member_id="chief",
+    )
+    app = create_app(http_settings, http_store)
+    files = {"file": ("full-cycle-export.zip", raw, "application/zip")}
+    headers = {"X-API-Key": "offline-operator-fixture-only"}
+    untrusted = {"X-API-Key": "offline-other-fixture-only"}
+
+    async def exercise_http_import() -> None:
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app),
+            base_url="http://offline-stage.invalid",
+        ) as client:
+            noauth = await client.post("/v1/imports/preview", files=files)
+            assert noauth.status_code == 401, noauth.text
+            preview_http = await client.post(
+                "/v1/imports/preview", files=files, headers=headers
+            )
+            assert preview_http.status_code == 200, preview_http.text
+            details = preview_http.json()
+            assert details["source_archive"]["boundaries"] == "manifest"
+            assert details["chapter_count"] == 3 and details["stored"] is False
+            with http_store._connect() as db:
+                assert db.execute("SELECT COUNT(*) FROM books").fetchone()[0] == 0
+            uploaded = await client.post(
+                "/v1/imports/stages",
+                files=files,
+                headers={**headers, "Idempotency-Key": "fullcycle-offline-stage"},
+            )
+            assert uploaded.status_code == 201, uploaded.text
+            stage_id = uploaded.json()["stage_id"]
+            assert uploaded.json()["preview"]["chapter_count"] == 3
+            foreign = await client.get(
+                f"/v1/imports/stages/{stage_id}", headers=untrusted
+            )
+            assert foreign.status_code == 404, foreign.text
+            chapter_decisions = [
+                {
+                    "sequence": i + 1, "action": "create",
+                    "chapter_id": f"http-{number}",
+                    "chapter_index": number,
+                    "chapter_path": f"chapters/{number}.xhtml",
+                    "expected_revision": 0,
+                }
+                for i, number in enumerate((7, 9, 10))
+            ]
+            confirmed = await client.post(
+                f"/v1/imports/stages/{stage_id}/confirm",
+                headers=headers,
+                json={
+                    "book_id": "full-cycle-http-disposable",
+                    "book_mode": "create",
+                    "title": "Offline Full Cycle test only",
+                    "prefix_policy": "reject",
+                    "owner_member_id": "operator",
+                    "chapters": chapter_decisions,
+                },
+            )
+            assert confirmed.status_code == 200, confirmed.text
+            assert confirmed.json()["imported_count"] == 3
+            raw_endpoint = (
+                "/v1/imports/books/full-cycle-http-disposable/chapters/"
+                "http-9/archive-original"
+            )
+            unauth_read = await client.get(raw_endpoint)
+            assert unauth_read.status_code == 401, unauth_read.text
+            original_read = await client.get(raw_endpoint, headers=headers)
+            assert original_read.status_code == 200, original_read.text
+            assert original_read.json()["original_text"] == "原文九.\\n\\nАбзац два."
+            assert original_read.json()["working_text"] == (
+                "手工 исправленный текст.\\n\\nАбзац два."
+            )
+
+    with (
+        patch("socket.socket.connect", refuse_network),
+        patch("socket.socket.connect_ex", refuse_network),
+        patch("socket.create_connection", refuse_network),
+        patch("socket.getaddrinfo", refuse_network),
+    ):
+        asyncio.run(exercise_http_import())
+        restarted = create_app(http_settings, QueueStore(http_store.db_path))
+        assert restarted.state.import_sessions.archive_original(
+            "full-cycle-http-disposable", "http-9"
+        )["source_index"] == 9
+
+    print("stage_full_cycle_zip_http_preview_import=PASS")
+    print("stage_full_cycle_zip_http_auth_isolation=PASS")
+    print("stage_full_cycle_zip_http_restart_readback=PASS")
 
     print("stage_full_cycle_zip_exporter_v1=PASS")
     print("stage_full_cycle_zip_atomic_import=PASS")
