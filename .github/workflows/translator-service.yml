@@ -60,7 +60,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 16
     env:
-      ARARRA_SHA: 1bc65fc4624e1539c402df465407ebcee38f651f
+      ARARRA_SHA: c3d7e544d70732525ea0ce0f8e39703106ea6476
     steps:
       - uses: actions/checkout@v4
         with:
@@ -68,7 +68,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: Lalalalendia/ararra
-          ref: 1bc65fc4624e1539c402df465407ebcee38f651f
+          ref: c3d7e544d70732525ea0ce0f8e39703106ea6476
           path: ararra
           persist-credentials: false
       - name: Verify exact Ararra version and protected main ancestry
@@ -365,7 +365,7 @@ jobs:
     environment: production
     timeout-minutes: 9
     env:
-      ARARRA_SHA: 1bc65fc4624e1539c402df465407ebcee38f651f
+      ARARRA_SHA: c3d7e544d70732525ea0ce0f8e39703106ea6476
     steps:
       - uses: actions/checkout@v4
         with:
