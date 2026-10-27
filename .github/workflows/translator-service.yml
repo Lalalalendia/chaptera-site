@@ -304,6 +304,12 @@ jobs:
           grep -Fq 'stage_full_cycle_zip_atomic_import=PASS' deploy/translator/verify-full-cycle-zip-offline.py
           grep -Fq 'stage_full_cycle_zip_original_readback=PASS' deploy/translator/verify-full-cycle-zip-offline.py
           grep -Fq 'stage_full_cycle_zip_network_calls=0' deploy/translator/verify-full-cycle-zip-offline.py
+          # Installation is forbidden unless the exact staged packet has
+          # completed every rootless offline smoke, including Full Cycle ZIP.
+          grep -Fq 'translator_stage_offline_acceptance=PASS' deploy/translator/verify-staged-release.sh
+          grep -Fq 'STAGED_SMOKE_SHA256' deploy/translator/verify-staged-release.sh
+          grep -Fq 'error=missing_accepted_offline_stage' deploy/translator/install-release.sh
+          grep -Fq 'error=stage_acceptance_packet_mismatch' deploy/translator/install-release.sh
           # Regression against staging a worker that would run without the
           # new Gemini budget or fail to verify independent vault escrow.
           grep -Fq 'assert store.claim_next(require_personal_key=True) is None' deploy/translator/verify-staged-release.sh
@@ -448,6 +454,12 @@ jobs:
           grep -Fq 'stage_full_cycle_zip_atomic_import=PASS' deploy/translator/verify-full-cycle-zip-offline.py
           grep -Fq 'stage_full_cycle_zip_original_readback=PASS' deploy/translator/verify-full-cycle-zip-offline.py
           grep -Fq 'stage_full_cycle_zip_network_calls=0' deploy/translator/verify-full-cycle-zip-offline.py
+          # Installation is forbidden unless the exact staged packet has
+          # completed every rootless offline smoke, including Full Cycle ZIP.
+          grep -Fq 'translator_stage_offline_acceptance=PASS' deploy/translator/verify-staged-release.sh
+          grep -Fq 'STAGED_SMOKE_SHA256' deploy/translator/verify-staged-release.sh
+          grep -Fq 'error=missing_accepted_offline_stage' deploy/translator/install-release.sh
+          grep -Fq 'error=stage_acceptance_packet_mismatch' deploy/translator/install-release.sh
           # Regression against staging a worker that would run without the
           # new Gemini budget or fail to verify independent vault escrow.
           grep -Fq 'assert store.claim_next(require_personal_key=True) is None' deploy/translator/verify-staged-release.sh
