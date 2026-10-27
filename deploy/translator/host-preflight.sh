@@ -208,9 +208,9 @@ for entry in api:chaptera-translator-api.service worker:chaptera-translator-work
     environment="$(systemctl show --property=Environment --value "$name" 2>/dev/null || true)"
   fi
   if [[ " $environment " == *" CHAPTERA_ARCHIVE_ONLY=1 "* ]]; then
-    printf 'archive_only_%s_unit=ready\\n' "$label"
+    printf 'archive_only_%s_unit=ready\n' "$label"
   else
-    printf 'archive_only_%s_unit=requires_bootstrap\\n' "$label"
+    printf 'archive_only_%s_unit=requires_bootstrap\n' "$label"
   fi
 done
 
