@@ -17,7 +17,7 @@ bash deploy/translator/manual-stage-no-actions.sh chaptera-deploy@YOUR_VPS_HOST
 
 The command reads the single agreed source SHA directly from the two
 `ARARRA_SHA` entries in this branch's `translator-service.yml` (currently
-`0b793ed1e8314abd0d286cb1cd9d7b1c11d3931e`). It refuses divergent
+`1bc65fc4624e1539c402df465407ebcee38f651f`). It refuses divergent
 pins, unproven/non-main commits, missing MVP consent/TXT modules, or missing
 VPS MVP smoke code. The latest `ararra` UI-only PR #145 is **not** included
 until the release pin is explicitly updated and rechecked.
@@ -40,6 +40,32 @@ runner must not be installed on this memory-constrained VPS.
 
 This is a dedicated service deployment, **not** a public Chaptera site release.
 It never changes Reader binaries, Nginx, the landing, or the Reader database.
+
+## 27 October 2026 — Full Cycle App ZIP importer included in staging candidate (not installed)
+
+- The source pin in `translator-service.yml` now points to
+  `ararra@1bc65fc4624e1539c402df465407ebcee38f651f`,
+  after upstream [#156](https://github.com/Lalalalendia/ararra/pull/156)
+  was merged with exact-head Python 3.11/3.12, Web, Chromium and native Rust UI
+  checks successful. Upstream [#151](https://github.com/Lalalalendia/ararra/pull/151),
+  [#153](https://github.com/Lalalalendia/ararra/pull/153),
+  [#154](https://github.com/Lalalalendia/ararra/pull/154), and
+  [#155](https://github.com/Lalalalendia/ararra/pull/155) implement the source
+  ZIP parser, validation and operator review.
+- The Full Cycle importer reads `full_cycle_app.chapter_exchange` v1
+  `kind=source` archives from `manifest.json` (identity, original and working
+  text, SHA-256, irregular ordering/gaps). It requires explicit create/replace/skip
+  decisions and does not start Gemini, Drive, or source-site scraping.
+- The build guard now demands the archive importer, documented contract, both
+  offline test suites and the ZIP fixture produced by the original Full Cycle
+  exporter. Both the GitHub workflow and the no-Actions stage path run upstream
+  `pytest -q` on the exact pinned source.
+- **Not installed on the VPS:** private site CI is blocked by exhausted hosted
+  runner minutes. Use the reviewed, stage-only `manual-stage-no-actions.sh`
+  from a trusted workstation with previously verified SSH access; require
+  successful offline VPS stage, current backup/restore proof, resource/health
+  preflight and explicit separately gated `install=YES` before activation.
+  This documentation update itself transfers no files and changes no services.
 
 ## 25 October 2026 — ERIDA MVP staged candidate (not installed)
 
