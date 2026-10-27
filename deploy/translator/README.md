@@ -1,5 +1,29 @@
 # Private Ararra translator deployment — VPS
 
+## 27 October 2026 — read-only VPS preflight without GitHub Actions
+
+Before attempting to stage anything, from a trusted Linux/WSL2 workstation
+that already has the audited repository branch and a verified SSH host key:
+
+```bash
+bash deploy/translator/manual-host-preflight-no-actions.sh chaptera-deploy@YOUR_VPS_HOST
+```
+
+This runs the existing `host-preflight.sh` over the trusted SSH session
+using stdin, then checks the read-only completion and source-pilot resource
+markers. It performs **no upload, installation, service restart, secret read,
+production SQLite access or billed translation**. The host probe's public
+unauthenticated model-endpoint connectivity check is a network GET; it does
+not send a Gemini credential or generate paid text.
+
+`translator_readonly_resource_preflight=PASS` only means current
+resource/collector readiness. It explicitly prints
+`translator_offhost_restore_gate=NOT_ASSESSED`: a real, independently
+recoverable backup, escrowed keys, fresh backup restore, operator acceptance,
+site CI and deployment activation are **not** inferred. If resources are
+insufficient or the remote report is missing a required marker, this wrapper
+exits nonzero and leaves the VPS unchanged.
+
 ## 27 October 2026 — staging when private GitHub Actions minutes are exhausted
 
 The private `chaptera-site` repository cannot allocate GitHub-hosted runners
@@ -65,6 +89,10 @@ It never changes Reader binaries, Nginx, the landing, or the Reader database.
   wheel into a disposable venv on the staging machine, the smoke tests
   `manifest.json` chapter identity, original/working hashes, preview, stage,
   atomic confirmation and SQLite raw-copy recovery after opening a fresh store.
+  The same installed-wheel stage probe also uses in-process ASGI HTTP to
+  verify `/v1/imports/preview`, `/v1/imports/stages`, `/confirm`, unauthenticated
+  rejection, cross-operator isolation and post-restart raw-original readback;
+  no TCP listener or external network is opened.
   The code explicitly refuses socket connections and never uses production data.
 - A successful complete offline smoke writes `STAGED_SMOKE_SHA256` in the
   incoming slot with the exact Ararra source SHA and wheelhouse SHA-256. The
