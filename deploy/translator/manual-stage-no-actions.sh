@@ -35,6 +35,7 @@ sha="${pins[0]}"
 # Never stage an older site branch without the per-chapter consent/UTF-8 smoke.
 grep -Fq 'stage_mvp_readable_chapter_txt=PASS' "$script_dir/verify-staged-release.sh" || fail 'mvp_stage_gate_absent_checkout_pr_79'
 for file in bootstrap-host.sh install-release.sh verify-staged-release.sh pilot-chapter-offline.py \
+    verify-full-cycle-zip-offline.py \
     chaptera-translator-api.service chaptera-translator-worker.service \
     chaptera-translator-drive-export.service chaptera-translator-drive-export.timer \
     install-drive-export-units.sh chaptera-translator-backup-drive.service \
@@ -45,6 +46,7 @@ for shell_file in bootstrap-host.sh install-release.sh verify-staged-release.sh 
     install-drive-export-units.sh install-backup-drive-units.sh; do
   bash -n "$script_dir/$shell_file" || fail "bad_shell_syntax_$shell_file"
 done
+python3.12 -m py_compile "$script_dir/verify-full-cycle-zip-offline.py" || fail 'bad_full_cycle_zip_smoke_syntax'
 printf 'manual_stage_source_sha=%s\n' "$sha"
 printf 'manual_stage_git_actions_minutes=0\n'
 work="$(mktemp -d "${TMPDIR:-/tmp}/erida-manual-stage.XXXXXXXX")"
@@ -85,7 +87,9 @@ mkdir -p "$work/packet/wheelhouse"
 "$work/build-venv/bin/python" -m pip wheel --disable-pip-version-check --no-input \
   --wheel-dir "$work/packet/wheelhouse" pip
 printf '%s\n' "$sha" > "$work/packet/SOURCE_SHA"
-(cd "$work/packet" && sha256sum wheelhouse/*.whl > SHA256SUMS)
+cp "$work/ararra/tests/fixtures/full_cycle_actual_exporter_20261017.zip.b64" "$work/packet/full-cycle-exporter.zip.b64"
+cp "$script_dir/verify-full-cycle-zip-offline.py" "$work/packet/verify-full-cycle-zip-offline.py"
+(cd "$work/packet" && sha256sum wheelhouse/*.whl full-cycle-exporter.zip.b64 verify-full-cycle-zip-offline.py > SHA256SUMS)
 tar -czf "$work/translator-wheelhouse.tar.gz" -C "$work/packet" .
 (cd "$work" && sha256sum translator-wheelhouse.tar.gz > translator-wheelhouse.sha256)
 
