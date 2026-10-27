@@ -217,67 +217,65 @@ print("stage_mvp_gemini_network_calls=0")
 print("stage_mvp_drive_network_calls=0")
 PY
 
-# RE-02: packaged one-shot source worker, offline in a disposable SQLite DB.
-# The real TLS/robots fetcher and production queue are intentionally untouched.
+# RE-02: archive-only installed wheel. Full Cycle App performs all site
+# parsing on the desktop, so this service has NO source collection endpoints.
+# Never import source_* modules or touch the live source-job SQLite state.
 env -u CHAPTERA_GEMINI_API_KEY -u CREDENTIALS_DIRECTORY \
-  "$work/venv/bin/python" - "$work" <<'PY'
+    CHAPTERA_ARCHIVE_ONLY=1 "$work/venv/bin/python" - "$work" <<'PY'
 import asyncio
+import importlib.util
+import os
 from pathlib import Path
 import subprocess
 import sys
 
-from chaptera_server.source_collect import catalog_from_html
-from chaptera_server.source_job_store import SourceJobStore
-from chaptera_server.source_job_worker import SourceCollectionWorker
+import httpx
+from chaptera_server.api import create_app
+from chaptera_server.config import Settings
 from chaptera_server.storage import QueueStore
 
 root = Path(sys.argv[1])
-book = "https://www.royalroad.com/fiction/142007/aura"
-toc = '<div id="chapters">' + "".join(
-    f'<a href="/fiction/142007/aura/chapter/{60000+i}/{i}-part">'
-    f'Chapter {i} - Offline fixture</a>'
-    for i in (1, 2, 3)
-) + "</div>"
-catalog = catalog_from_html("royalroad", book, toc)
-assert len(catalog.chapters) == 3
-assert all(c.entry_type == "chapter" for c in catalog.chapters)
-jobs = SourceJobStore(QueueStore(root / "disposable-source-pilot.sqlite3"))
-untouched = jobs.create("other-operator", "offline-cat-1", catalog, [1, 2])
-target = jobs.create("pilot-operator", "offline-cat-2", catalog, [3])
-
-class OfflineSourceOnly:
-    def __init__(self):
-        self.calls = []
-    async def fetch(self, source, url):
-        assert source == "royalroad"
-        self.calls.append(url)
-        assert url.endswith("/60003/3-part")
-        return ('<div class="chapter-content"><p>'
-                + ("Permitted synthetic test body. " * 12)
-                + '</p></div>')
-
-fetcher = OfflineSourceOnly()
-worker = SourceCollectionWorker(jobs, fetcher)
-assert asyncio.run(worker.run_once(only_job_id=target["job_id"])) is True
-assert jobs.get("pilot-operator", target["job_id"])["completed"] == 1
-assert jobs.get("pilot-operator", target["job_id"])["status"] == "complete"
-assert jobs.get("other-operator", untouched["job_id"])["completed"] == 0
-assert jobs.get("other-operator", untouched["job_id"])["status"] == "queued"
-assert len(fetcher.calls) == 1
-assert asyncio.run(worker.run_once(only_job_id=target["job_id"])) is False
-assert len(fetcher.calls) == 1
-
+assert importlib.util.find_spec("chaptera_server.source_runtime") is None
+assert importlib.util.find_spec("chaptera_server.source_job_worker") is None
+settings = Settings(
+    db_path=root / "disposable-archive-only-runtime.sqlite3",
+    team_tokens={"operator": "archive-only-test-token"},
+    archive_only=True,
+)
+app = create_app(settings, QueueStore(settings.db_path))
+assert not hasattr(app.state, "source_job_store")
+assert not hasattr(app.state, "public_source_fetcher")
+assert not hasattr(app.state, "source_catalog_store")
+async def verify():
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://offline.test",
+    ) as client:
+        blocked = await client.get(
+            "/v1/source-books/sites",
+            headers={"X-API-Key": "archive-only-test-token"},
+        )
+        assert blocked.status_code == 404, blocked.text
+        page = await client.get("/app/import")
+        assert page.status_code == 200 and 'id="source-import"' not in page.text
+        assert 'id="chapters_file"' in page.text
+asyncio.run(verify())
 cli = Path(sys.executable).with_name("chaptera-server")
-for args in (("source-worker", "--run-once"),
-             ("source-worker", "--run-once", "--job-id", "not-uuid")):
-    probe = subprocess.run([str(cli), *args], capture_output=True,
-                           text=True, timeout=15, check=False)
-    assert probe.returncode == 2, (args, probe.returncode)
-print("stage_source_one_shot_actor_isolation=PASS")
-print("stage_source_one_shot_checkpoint=PASS")
-print("stage_source_one_shot_cli_failclosed=PASS")
-print("stage_source_network_calls=0")
-print("live_source_jobs_claimed=0")
+worker_db = root / "source-worker-must-not-open.sqlite3"
+environment = dict(os.environ)
+environment["CHAPTERA_ARCHIVE_ONLY"] = "1"
+environment["CHAPTERA_DB_PATH"] = str(worker_db)
+probe = subprocess.run(
+    [str(cli), "source-worker"], capture_output=True, text=True, timeout=15,
+    check=False, env=environment,
+)
+assert probe.returncode == 2, probe.returncode
+assert "source-worker unavailable" in probe.stderr
+assert not worker_db.exists()
+print("stage_archive_only_crawler_routes=DENIED")
+print("stage_archive_only_modules=ABSENT")
+print("stage_archive_only_source_worker=DENIED")
+print("stage_archive_only_zip_upload_ui=PASS")
+print("stage_archive_only_network_calls=0")
 print("production_sqlite_access=no")
 PY
 
@@ -296,7 +294,7 @@ from chaptera_server.storage import JobSpec, QueueStore
 work = Path(sys.argv[1])
 db = work / "isolated-readera.sqlite3"
 settings = Settings(db_path=db, team_tokens={"operator": "offline-test-only"},
-                    admin_member_id="operator")
+                    admin_member_id="operator", archive_only=True)
 store = QueueStore(db)
 create_app(settings, store)
 job = store.create_job("operator", JobSpec(
