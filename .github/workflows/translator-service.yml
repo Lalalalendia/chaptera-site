@@ -188,47 +188,24 @@ jobs:
           grep -Fq 'id="source-job-history" class="source-job-history"' ararra/src/chaptera_server/web_ui/templates/shell.html
           grep -Fq '.topbar-logout {' ararra/src/chaptera_server/web_ui/static/css/readera.css
           grep -Fq '#source-job-history {' ararra/src/chaptera_server/web_ui/static/css/readera.css
-          # RE-02 shared originals: the real team can read verified source
-          # chapters without taking over another moderator's job controls.
-          test -s ararra/src/chaptera_server/source_team_reader.py
-          # RE-02: immutable shared originals, SQLite transactional retention
-          # and admin-only explicit takedown with no automatic site crawling.
-          # First-pilot RE-02 requires the accepted exact SHA and atomic
-          # single-UUID one-shot worker. Never enable the persistent collector.
-          test -s ararra/src/chaptera_server/source_catalog_semantics.py
-          test -s ararra/src/chaptera_server/source_job_worker.py
-          test -s ararra/tests/test_source_semantic_integration.py
-          grep -Fq 'only_job_id: str | None = None' ararra/src/chaptera_server/source_job_store.py
-          grep -Fq 'source-worker --run-once requires --job-id' ararra/src/chaptera_server/cli.py
-          test -s ararra/docs/RE02_FIRST_PILOT.md
-          test -s ararra/src/chaptera_server/source_original_archive.py
-          test -s ararra/src/chaptera_server/http/routers/source_archive.py
-          test -s ararra/src/chaptera_server/web_ui/static/js/source-archive-view.mjs
-          test -s ararra/tests/test_source_original_archive.py
-          grep -Fq 'app.include_router(source_archive.router)' ararra/src/chaptera_server/api.py
-          grep -Fq 'capture_before_delete' ararra/src/chaptera_server/source_job_store.py
-          grep -Fq 'CREATE TABLE IF NOT EXISTS source_original_purge_audit' ararra/src/chaptera_server/source_original_archive.py
-          grep -Fq 'admin_actor: str = Depends(require_admin)' ararra/src/chaptera_server/http/routers/source_archive.py
-          grep -Fq 'body.textContent=data.body' ararra/src/chaptera_server/web_ui/static/js/source-archive-view.mjs
-          grep -Fq 'error=insufficient_disk_for_shared_source_archive' deploy/translator/install-release.sh
-          test -s ararra/src/chaptera_server/http/routers/source_team.py
-          test -s ararra/src/chaptera_server/web_ui/static/js/source-shared-view.mjs
-          grep -Fq 'app.include_router(source_team.router)' ararra/src/chaptera_server/api.py
-          grep -Fq 'router = APIRouter(prefix="/v1/source-books/shared"' ararra/src/chaptera_server/http/routers/source_team.py
-          grep -Fq 'dependencies=[Depends(require_member)]' ararra/src/chaptera_server/http/routers/source_team.py
-          grep -Fq 'team_read=True' ararra/src/chaptera_server/http/routers/source_team.py
-          grep -Fq 'id="source-shared" class="source-shared"' ararra/src/chaptera_server/web_ui/templates/shell.html
-          grep -Fq 'body.textContent=chapter.body' ararra/src/chaptera_server/web_ui/static/js/source-shared-view.mjs
-          grep -Fq 'def test_team_can_read_single_verified_chapter_but_not_manage_other_jobs' ararra/tests/test_source_team_reads.py
-          # RE-02 Timotxt: enforce correct source-review components at this pin.
-          test -s ararra/src/chaptera_server/source_timotxt.py
-          test -s ararra/src/chaptera_server/source_chapter_parts.py
-          test -s ararra/src/chaptera_server/source_timotxt_normalization.py
-          test -s ararra/src/chaptera_server/source_job_review.py
-          test -s ararra/src/chaptera_server/http/routers/source_reviews.py
-          test -s ararra/tests/test_source_timotxt_quarantine.py
-          grep -Fq 'app.include_router(source_reviews.router)' ararra/src/chaptera_server/api.py
-          grep -Fq 'allow_unverified_timotxt=(claim["source"] == "timotxt")' ararra/src/chaptera_server/source_job_worker.py
+          # RE-02 archive-only: Full Cycle App performs all website crawling.
+          # Keep ZIP v1 importer, library, editor, Gemini and Drive unchanged.
+          # No source_* Python/JS files may be in the installed wheel.
+          test -s ararra/src/chaptera_server/source_runtime.py
+          test -s ararra/tests/test_archive_only_runtime.py
+          test -s ararra/tools/check_archive_only_wheel.py
+          test -s ararra/docs/RE02_ARCHIVE_ONLY_RELEASE.md
+          test -s ararra/setup.py
+          grep -Fq 'CHAPTERA_ARCHIVE_ONLY_BUILD' ararra/setup.py
+          grep -Fq 'archive_only: bool = False' ararra/src/chaptera_server/config.py
+          grep -Fq 'if not settings.archive_only:' ararra/src/chaptera_server/api.py
+          grep -Fq 'source-worker unavailable:' ararra/src/chaptera_server/cli.py
+          grep -Fq '{% if not archive_only %}' ararra/src/chaptera_server/web_ui/templates/shell.html
+          grep -Fq "await import('./source-book-import-view.mjs')" ararra/src/chaptera_server/web_ui/static/js/readera.mjs
+          grep -Fqx 'Environment=CHAPTERA_ARCHIVE_ONLY=1' deploy/translator/chaptera-translator-api.service
+          grep -Fqx 'Environment=CHAPTERA_ARCHIVE_ONLY=1' deploy/translator/chaptera-translator-worker.service
+          grep -Fq 'CHAPTERA_ARCHIVE_ONLY_BUILD=1' deploy/translator/manual-stage-no-actions.sh
+          grep -Fq 'archive_only=True' deploy/translator/verify-full-cycle-zip-offline.py
           # Timotxt source-worker remains disabled by the normal installer.
           # Do not enable the optional source-worker in the normal rollout.
           if grep -Eq 'source-worker.service|source-collection-enabled' deploy/translator/install-release.sh; then
@@ -319,10 +296,12 @@ jobs:
           grep -Fq 'stage_personal_gemini_vault_recovery=PASS' deploy/translator/verify-staged-release.sh
           grep -Fq 'stage_personal_gemini_rpd_caps=PASS' deploy/translator/verify-staged-release.sh
           # RE-02 first-pilot acceptance must remain synthetic and isolated.
-          grep -Fq 'stage_source_one_shot_actor_isolation=PASS' deploy/translator/verify-staged-release.sh
-          grep -Fq 'stage_source_one_shot_checkpoint=PASS' deploy/translator/verify-staged-release.sh
-          grep -Fq 'stage_source_one_shot_cli_failclosed=PASS' deploy/translator/verify-staged-release.sh
-          grep -Fq 'stage_source_network_calls=0' deploy/translator/verify-staged-release.sh
+          grep -Fq 'stage_archive_only_crawler_routes=DENIED' deploy/translator/verify-staged-release.sh
+          grep -Fq 'stage_archive_only_modules=ABSENT' deploy/translator/verify-staged-release.sh
+          grep -Fq 'stage_archive_only_source_worker=DENIED' deploy/translator/verify-staged-release.sh
+          grep -Fq 'stage_archive_only_zip_upload_ui=PASS' deploy/translator/verify-staged-release.sh
+          grep -Fq 'stage_archive_only_source_modules=ABSENT' deploy/translator/verify-full-cycle-zip-offline.py
+          grep -Fq 'stage_archive_only_http_crawler_routes=DENIED' deploy/translator/verify-full-cycle-zip-offline.py
           grep -Fq 'production_sqlite_access=no' deploy/translator/verify-staged-release.sh
           python -m py_compile deploy/translator/pilot-chapter-offline.py
           curl -fsSL --retry 3 -H 'Accept: application/vnd.github+json' \
@@ -337,9 +316,9 @@ jobs:
         run: |
           set -euo pipefail
           python -m pip install -e './ararra[test]'
-          (cd ararra && pytest -q && python tools/check_architecture.py)
+          (cd ararra && pytest -q && python tools/check_architecture.py && python tools/check_archive_only_wheel.py)
           mkdir -p .translator-packet/wheelhouse
-          python -m pip wheel --wheel-dir .translator-packet/wheelhouse './ararra[offsite-s3]'
+          CHAPTERA_ARCHIVE_ONLY_BUILD=1 python -m pip wheel --wheel-dir .translator-packet/wheelhouse './ararra[offsite-s3]'
           python -m pip wheel --wheel-dir .translator-packet/wheelhouse pip
           printf '%s\n' "$ARARRA_SHA" > .translator-packet/SOURCE_SHA
           cp ararra/tests/fixtures/full_cycle_actual_exporter_20261017.zip.b64 .translator-packet/full-cycle-exporter.zip.b64
