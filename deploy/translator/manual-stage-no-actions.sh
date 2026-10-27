@@ -59,10 +59,17 @@ git -C "$work/ararra" merge-base --is-ancestor "$sha" origin/main || fail 'pin_n
 grep -Fq 'version = "0.6.2"' "$work/ararra/pyproject.toml" || fail 'unreviewed_package_version'
 for path in src/chaptera_server/batch_drive_consent.py \
     src/chaptera_server/chapter_plain_txt.py tests/test_mvp_file_to_drive.py \
-    tests/test_drive_export.py; do
+    tests/test_drive_export.py \
+    src/chaptera_server/full_cycle_archive.py \
+    docs/RE02_FULL_CYCLE_ARCHIVE_IMPORT.md \
+    tests/test_full_cycle_archive_import.py \
+    tests/test_full_cycle_actual_exporter_compat.py \
+    tests/fixtures/full_cycle_actual_exporter_20261017.zip.b64; do
   [[ -s "$work/ararra/$path" ]] || fail "missing_mvp_source_$path"
 done
 grep -Fq -- '--consented-only' "$work/ararra/src/chaptera_server/cli.py" || fail 'missing_consented_only_selector'
+grep -Fq 'full_cycle_app.chapter_exchange' "$work/ararra/docs/RE02_FULL_CYCLE_ARCHIVE_IMPORT.md" || fail 'missing_full_cycle_zip_contract'
+
 
 python3.12 -m venv "$work/build-venv"
 "$work/build-venv/bin/python" -m pip install --disable-pip-version-check --no-input -e "$work/ararra[test]"
