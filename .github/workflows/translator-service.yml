@@ -213,6 +213,12 @@ jobs:
             echo 'error=source_worker_activation_forbidden' >&2; exit 2
           fi
           grep -Fq 'error=active_legacy_source_worker_forbidden_in_archive_release' deploy/translator/install-release.sh
+          # Installer must verify effective on-host systemd unit settings before
+          # switching symlink to a wheel that has no legacy parser modules.
+          grep -Fq 'error=missing_archive_only_runtime_unit_' deploy/translator/install-release.sh
+          grep -Fq 'systemctl show --property=Environment --value' deploy/translator/install-release.sh
+          grep -Fq 'CHAPTERA_ARCHIVE_ONLY=1' deploy/translator/chaptera-translator-api.service
+          grep -Fq 'CHAPTERA_ARCHIVE_ONLY=1' deploy/translator/chaptera-translator-worker.service
           if grep -Fq 'class="workspace-actions"' ararra/src/chaptera_server/web_ui/templates/shell.html; then
             echo 'error=detached_logout_row_forbidden' >&2; exit 2
           fi
