@@ -8,6 +8,7 @@ on:
       - 'deploy/translator/bootstrap-host.sh'
       - 'deploy/translator/install-release.sh'
       - 'deploy/translator/verify-staged-release.sh'
+      - 'deploy/translator/verify-full-cycle-zip-offline.py'
       - 'deploy/translator/pilot-chapter-offline.py'
       - 'deploy/translator/chaptera-translator-api.service'
       - 'deploy/translator/chaptera-translator-worker.service'
@@ -24,6 +25,7 @@ on:
       - 'deploy/translator/bootstrap-host.sh'
       - 'deploy/translator/install-release.sh'
       - 'deploy/translator/verify-staged-release.sh'
+      - 'deploy/translator/verify-full-cycle-zip-offline.py'
       - 'deploy/translator/pilot-chapter-offline.py'
       - 'deploy/translator/chaptera-translator-api.service'
       - 'deploy/translator/chaptera-translator-worker.service'
@@ -58,7 +60,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 16
     env:
-      ARARRA_SHA: 8cffa23d6888963107900b63d1e63d1f7f9b0f84
+      ARARRA_SHA: c3d7e544d70732525ea0ce0f8e39703106ea6476
     steps:
       - uses: actions/checkout@v4
         with:
@@ -66,7 +68,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: Lalalalendia/ararra
-          ref: 8cffa23d6888963107900b63d1e63d1f7f9b0f84
+          ref: c3d7e544d70732525ea0ce0f8e39703106ea6476
           path: ararra
           persist-credentials: false
       - name: Verify exact Ararra version and protected main ancestry
@@ -124,6 +126,28 @@ jobs:
           grep -Fq 'drive-owner-refresh-token-backup-candidate.txt' ararra/scripts/connect-google-drive.ps1
           grep -Fq -- '--backup-folder-id' ararra/src/chaptera_server/cli.py
           test -s ararra/src/chaptera_server/drive_outbox.py
+          # RE-MVP: explicit user consent, chapter-level Drive handoff,
+          # readable TXT, and isolated 1/N chapter tests in the EXACT pin.
+          test -s ararra/src/chaptera_server/batch_drive_consent.py
+          test -s ararra/src/chaptera_server/chapter_plain_txt.py
+          test -s ararra/tests/test_mvp_file_to_drive.py
+          test -s ararra/tests/test_drive_export.py
+          grep -Fq 'drive_export_requested: bool = False' ararra/src/chaptera_server/http/schemas.py
+          grep -Fq 'def readable_txt(fragment: str)' ararra/src/chaptera_server/chapter_plain_txt.py
+          grep -Fq 'from .chapter_plain_txt import readable_txt' ararra/src/chaptera_server/drive_export.py
+          grep -Fq 'def test_one_uploaded_file_becomes_exactly_n_separate_drive_handoffs' ararra/tests/test_mvp_file_to_drive.py
+          grep -Fq 'def test_consented_batch_exports_n_actual_readable_txt_pairs_without_overwrite' ararra/tests/test_drive_export.py
+          grep -Fq -- '--consented-only' ararra/src/chaptera_server/cli.py
+          # RE-02: Full Cycle App source ZIP is decoded by the manifest,
+          # never re-parsed by chapter-heading heuristics.
+          # Public Ararra CI must test both the importer and real exporter ZIP.
+          test -s ararra/src/chaptera_server/full_cycle_archive.py
+          test -s ararra/docs/RE02_FULL_CYCLE_ARCHIVE_IMPORT.md
+          test -s ararra/tests/test_full_cycle_archive_import.py
+          test -s ararra/tests/test_full_cycle_actual_exporter_compat.py
+          test -s ararra/tests/fixtures/full_cycle_actual_exporter_20261017.zip.b64
+          grep -Fq 'full_cycle_app.chapter_exchange' ararra/docs/RE02_FULL_CYCLE_ARCHIVE_IMPORT.md
+          grep -Fq 'test_actual_full_cycle_exporter_zip_preview_commit_and_raw_readback' ararra/tests/test_full_cycle_actual_exporter_compat.py
           # Required for one shared moderator/book/(source,translation) root.
           grep -Fq 'CHAPTERA_DRIVE_ROOT_FOLDER_ID' ararra/src/chaptera_server/cli.py
           grep -Fq 'readeraPartFolder' ararra/src/chaptera_server/drive_export.py
@@ -164,52 +188,37 @@ jobs:
           grep -Fq 'id="source-job-history" class="source-job-history"' ararra/src/chaptera_server/web_ui/templates/shell.html
           grep -Fq '.topbar-logout {' ararra/src/chaptera_server/web_ui/static/css/readera.css
           grep -Fq '#source-job-history {' ararra/src/chaptera_server/web_ui/static/css/readera.css
-          # RE-02 shared originals: the real team can read verified source
-          # chapters without taking over another moderator's job controls.
-          test -s ararra/src/chaptera_server/source_team_reader.py
-          # RE-02: immutable shared originals, SQLite transactional retention
-          # and admin-only explicit takedown with no automatic site crawling.
-          # First-pilot RE-02 requires the accepted exact SHA and atomic
-          # single-UUID one-shot worker. Never enable the persistent collector.
-          test -s ararra/src/chaptera_server/source_catalog_semantics.py
-          test -s ararra/src/chaptera_server/source_job_worker.py
-          test -s ararra/tests/test_source_semantic_integration.py
-          grep -Fq 'only_job_id: str | None = None' ararra/src/chaptera_server/source_job_store.py
-          grep -Fq 'source-worker --run-once requires --job-id' ararra/src/chaptera_server/cli.py
-          test -s ararra/docs/RE02_FIRST_PILOT.md
-          test -s ararra/src/chaptera_server/source_original_archive.py
-          test -s ararra/src/chaptera_server/http/routers/source_archive.py
-          test -s ararra/src/chaptera_server/web_ui/static/js/source-archive-view.mjs
-          test -s ararra/tests/test_source_original_archive.py
-          grep -Fq 'app.include_router(source_archive.router)' ararra/src/chaptera_server/api.py
-          grep -Fq 'capture_before_delete' ararra/src/chaptera_server/source_job_store.py
-          grep -Fq 'CREATE TABLE IF NOT EXISTS source_original_purge_audit' ararra/src/chaptera_server/source_original_archive.py
-          grep -Fq 'admin_actor: str = Depends(require_admin)' ararra/src/chaptera_server/http/routers/source_archive.py
-          grep -Fq 'body.textContent=data.body' ararra/src/chaptera_server/web_ui/static/js/source-archive-view.mjs
-          grep -Fq 'error=insufficient_disk_for_shared_source_archive' deploy/translator/install-release.sh
-          test -s ararra/src/chaptera_server/http/routers/source_team.py
-          test -s ararra/src/chaptera_server/web_ui/static/js/source-shared-view.mjs
-          grep -Fq 'app.include_router(source_team.router)' ararra/src/chaptera_server/api.py
-          grep -Fq 'router = APIRouter(prefix="/v1/source-books/shared"' ararra/src/chaptera_server/http/routers/source_team.py
-          grep -Fq 'dependencies=[Depends(require_member)]' ararra/src/chaptera_server/http/routers/source_team.py
-          grep -Fq 'team_read=True' ararra/src/chaptera_server/http/routers/source_team.py
-          grep -Fq 'id="source-shared" class="source-shared"' ararra/src/chaptera_server/web_ui/templates/shell.html
-          grep -Fq 'body.textContent=chapter.body' ararra/src/chaptera_server/web_ui/static/js/source-shared-view.mjs
-          grep -Fq 'def test_team_can_read_single_verified_chapter_but_not_manage_other_jobs' ararra/tests/test_source_team_reads.py
-          # RE-02 Timotxt: enforce correct source-review components at this pin.
-          test -s ararra/src/chaptera_server/source_timotxt.py
-          test -s ararra/src/chaptera_server/source_chapter_parts.py
-          test -s ararra/src/chaptera_server/source_timotxt_normalization.py
-          test -s ararra/src/chaptera_server/source_job_review.py
-          test -s ararra/src/chaptera_server/http/routers/source_reviews.py
-          test -s ararra/tests/test_source_timotxt_quarantine.py
-          grep -Fq 'app.include_router(source_reviews.router)' ararra/src/chaptera_server/api.py
-          grep -Fq 'allow_unverified_timotxt=(claim["source"] == "timotxt")' ararra/src/chaptera_server/source_job_worker.py
+          # RE-02 archive-only: Full Cycle App performs all website crawling.
+          # Keep ZIP v1 importer, library, editor, Gemini and Drive unchanged.
+          # No source_* Python/JS files may be in the installed wheel.
+          test -s ararra/src/chaptera_server/source_runtime.py
+          test -s ararra/tests/test_archive_only_runtime.py
+          test -s ararra/tools/check_archive_only_wheel.py
+          test -s ararra/docs/RE02_ARCHIVE_ONLY_RELEASE.md
+          test -s ararra/setup.py
+          grep -Fq 'CHAPTERA_ARCHIVE_ONLY_BUILD' ararra/setup.py
+          grep -Fq 'archive_only: bool = False' ararra/src/chaptera_server/config.py
+          grep -Fq 'if not settings.archive_only:' ararra/src/chaptera_server/api.py
+          grep -Fq 'source-worker unavailable:' ararra/src/chaptera_server/cli.py
+          grep -Fq '{% if not archive_only %}' ararra/src/chaptera_server/web_ui/templates/shell.html
+          grep -Fq "await import('./source-book-import-view.mjs')" ararra/src/chaptera_server/web_ui/static/js/readera.mjs
+          grep -Fqx 'Environment=CHAPTERA_ARCHIVE_ONLY=1' deploy/translator/chaptera-translator-api.service
+          grep -Fqx 'Environment=CHAPTERA_ARCHIVE_ONLY=1' deploy/translator/chaptera-translator-worker.service
+          grep -Fq 'CHAPTERA_ARCHIVE_ONLY_BUILD=1' deploy/translator/manual-stage-no-actions.sh
+          grep -Fq 'archive_only=True' deploy/translator/verify-full-cycle-zip-offline.py
           # Timotxt source-worker remains disabled by the normal installer.
           # Do not enable the optional source-worker in the normal rollout.
-          if grep -Eq 'source-worker.service|source-collection-enabled' deploy/translator/install-release.sh; then
+          # Reading the legacy unit's active state is allowed; starting it is not.
+          if grep -Eq 'systemctl[[:space:]]+(enable|start|restart).*source-worker|touch[[:space:]].*source-collection-enabled' deploy/translator/install-release.sh; then
             echo 'error=source_worker_activation_forbidden' >&2; exit 2
           fi
+          grep -Fq 'error=active_legacy_source_worker_forbidden_in_archive_release' deploy/translator/install-release.sh
+          # Installer must verify effective on-host systemd unit settings before
+          # switching symlink to a wheel that has no legacy parser modules.
+          grep -Fq 'error=missing_archive_only_runtime_unit_' deploy/translator/install-release.sh
+          grep -Fq 'systemctl show --property=Environment --value' deploy/translator/install-release.sh
+          grep -Fq 'CHAPTERA_ARCHIVE_ONLY=1' deploy/translator/chaptera-translator-api.service
+          grep -Fq 'CHAPTERA_ARCHIVE_ONLY=1' deploy/translator/chaptera-translator-worker.service
           if grep -Fq 'class="workspace-actions"' ararra/src/chaptera_server/web_ui/templates/shell.html; then
             echo 'error=detached_logout_row_forbidden' >&2; exit 2
           fi
@@ -264,6 +273,8 @@ jobs:
             echo 'error=oauth_exposure_to_long_lived_service' >&2; exit 2
           fi
           bash -n deploy/translator/verify-staged-release.sh
+          test -s deploy/translator/verify-full-cycle-zip-offline.py
+          python -m py_compile deploy/translator/verify-full-cycle-zip-offline.py
           # The offline VPS stage must verify encryption and Google readback
           # without real external Drive requests or production SQLite access.
           grep -Fq 'stage_drive_encrypted_backup_roundtrip=PASS' deploy/translator/verify-staged-release.sh
@@ -271,16 +282,34 @@ jobs:
           grep -Fq 'stage_drive_three_folder_picker=PASS' deploy/translator/verify-staged-release.sh
           grep -Fq 'stage_drive_legacy_two_folder_picker=PASS' deploy/translator/verify-staged-release.sh
           grep -Fq 'stage_drive_oauth_network_calls=0' deploy/translator/verify-staged-release.sh
+          grep -Fq 'stage_mvp_readable_chapter_txt=PASS' deploy/translator/verify-staged-release.sh
+          grep -Fq 'stage_mvp_gemini_network_calls=0' deploy/translator/verify-staged-release.sh
+          grep -Fq 'stage_mvp_drive_network_calls=0' deploy/translator/verify-staged-release.sh
+          grep -Fq 'verify-full-cycle-zip-offline.py' deploy/translator/verify-staged-release.sh
+          grep -Fq 'stage_full_cycle_zip_atomic_import=PASS' deploy/translator/verify-full-cycle-zip-offline.py
+          grep -Fq 'stage_full_cycle_zip_original_readback=PASS' deploy/translator/verify-full-cycle-zip-offline.py
+          grep -Fq 'stage_full_cycle_zip_network_calls=0' deploy/translator/verify-full-cycle-zip-offline.py
+          grep -Fq 'stage_full_cycle_zip_http_preview_import=PASS' deploy/translator/verify-full-cycle-zip-offline.py
+          grep -Fq 'stage_full_cycle_zip_http_auth_isolation=PASS' deploy/translator/verify-full-cycle-zip-offline.py
+          grep -Fq 'stage_full_cycle_zip_http_restart_readback=PASS' deploy/translator/verify-full-cycle-zip-offline.py
+          # Installation is forbidden unless the exact staged packet has
+          # completed every rootless offline smoke, including Full Cycle ZIP.
+          grep -Fq 'translator_stage_offline_acceptance=PASS' deploy/translator/verify-staged-release.sh
+          grep -Fq 'STAGED_SMOKE_SHA256' deploy/translator/verify-staged-release.sh
+          grep -Fq 'error=missing_accepted_offline_stage' deploy/translator/install-release.sh
+          grep -Fq 'error=stage_acceptance_packet_mismatch' deploy/translator/install-release.sh
           # Regression against staging a worker that would run without the
           # new Gemini budget or fail to verify independent vault escrow.
           grep -Fq 'assert store.claim_next(require_personal_key=True) is None' deploy/translator/verify-staged-release.sh
           grep -Fq 'stage_personal_gemini_vault_recovery=PASS' deploy/translator/verify-staged-release.sh
           grep -Fq 'stage_personal_gemini_rpd_caps=PASS' deploy/translator/verify-staged-release.sh
           # RE-02 first-pilot acceptance must remain synthetic and isolated.
-          grep -Fq 'stage_source_one_shot_actor_isolation=PASS' deploy/translator/verify-staged-release.sh
-          grep -Fq 'stage_source_one_shot_checkpoint=PASS' deploy/translator/verify-staged-release.sh
-          grep -Fq 'stage_source_one_shot_cli_failclosed=PASS' deploy/translator/verify-staged-release.sh
-          grep -Fq 'stage_source_network_calls=0' deploy/translator/verify-staged-release.sh
+          grep -Fq 'stage_archive_only_crawler_routes=DENIED' deploy/translator/verify-staged-release.sh
+          grep -Fq 'stage_archive_only_modules=ABSENT' deploy/translator/verify-staged-release.sh
+          grep -Fq 'stage_archive_only_source_worker=DENIED' deploy/translator/verify-staged-release.sh
+          grep -Fq 'stage_archive_only_zip_upload_ui=PASS' deploy/translator/verify-staged-release.sh
+          grep -Fq 'stage_archive_only_source_modules=ABSENT' deploy/translator/verify-full-cycle-zip-offline.py
+          grep -Fq 'stage_archive_only_http_crawler_routes=DENIED' deploy/translator/verify-full-cycle-zip-offline.py
           grep -Fq 'production_sqlite_access=no' deploy/translator/verify-staged-release.sh
           python -m py_compile deploy/translator/pilot-chapter-offline.py
           curl -fsSL --retry 3 -H 'Accept: application/vnd.github+json' \
@@ -295,12 +324,14 @@ jobs:
         run: |
           set -euo pipefail
           python -m pip install -e './ararra[test]'
-          (cd ararra && pytest -q && python tools/check_architecture.py)
+          (cd ararra && pytest -q && python tools/check_architecture.py && python tools/check_archive_only_wheel.py)
           mkdir -p .translator-packet/wheelhouse
-          python -m pip wheel --wheel-dir .translator-packet/wheelhouse './ararra[offsite-s3]'
+          CHAPTERA_ARCHIVE_ONLY_BUILD=1 python -m pip wheel --wheel-dir .translator-packet/wheelhouse './ararra[offsite-s3]'
           python -m pip wheel --wheel-dir .translator-packet/wheelhouse pip
           printf '%s\n' "$ARARRA_SHA" > .translator-packet/SOURCE_SHA
-          (cd .translator-packet && sha256sum wheelhouse/*.whl > SHA256SUMS)
+          cp ararra/tests/fixtures/full_cycle_actual_exporter_20261017.zip.b64 .translator-packet/full-cycle-exporter.zip.b64
+          cp deploy/translator/verify-full-cycle-zip-offline.py .translator-packet/verify-full-cycle-zip-offline.py
+          (cd .translator-packet && sha256sum wheelhouse/*.whl full-cycle-exporter.zip.b64 verify-full-cycle-zip-offline.py > SHA256SUMS)
           tar -czf translator-wheelhouse.tar.gz -C .translator-packet .
           sha256sum translator-wheelhouse.tar.gz > translator-wheelhouse.sha256
       - name: Validate chapter-086 structural mock against pinned Ararra on runner
@@ -340,7 +371,7 @@ jobs:
     environment: production
     timeout-minutes: 9
     env:
-      ARARRA_SHA: 8cffa23d6888963107900b63d1e63d1f7f9b0f84
+      ARARRA_SHA: c3d7e544d70732525ea0ce0f8e39703106ea6476
     steps:
       - uses: actions/checkout@v4
         with:
@@ -397,6 +428,8 @@ jobs:
             echo 'error=oauth_exposure_to_long_lived_service' >&2; exit 2
           fi
           bash -n deploy/translator/verify-staged-release.sh
+          test -s deploy/translator/verify-full-cycle-zip-offline.py
+          python -m py_compile deploy/translator/verify-full-cycle-zip-offline.py
           # The offline VPS stage must verify encryption and Google readback
           # without real external Drive requests or production SQLite access.
           grep -Fq 'stage_drive_encrypted_backup_roundtrip=PASS' deploy/translator/verify-staged-release.sh
@@ -404,6 +437,22 @@ jobs:
           grep -Fq 'stage_drive_three_folder_picker=PASS' deploy/translator/verify-staged-release.sh
           grep -Fq 'stage_drive_legacy_two_folder_picker=PASS' deploy/translator/verify-staged-release.sh
           grep -Fq 'stage_drive_oauth_network_calls=0' deploy/translator/verify-staged-release.sh
+          grep -Fq 'stage_mvp_readable_chapter_txt=PASS' deploy/translator/verify-staged-release.sh
+          grep -Fq 'stage_mvp_gemini_network_calls=0' deploy/translator/verify-staged-release.sh
+          grep -Fq 'stage_mvp_drive_network_calls=0' deploy/translator/verify-staged-release.sh
+          grep -Fq 'verify-full-cycle-zip-offline.py' deploy/translator/verify-staged-release.sh
+          grep -Fq 'stage_full_cycle_zip_atomic_import=PASS' deploy/translator/verify-full-cycle-zip-offline.py
+          grep -Fq 'stage_full_cycle_zip_original_readback=PASS' deploy/translator/verify-full-cycle-zip-offline.py
+          grep -Fq 'stage_full_cycle_zip_network_calls=0' deploy/translator/verify-full-cycle-zip-offline.py
+          grep -Fq 'stage_full_cycle_zip_http_preview_import=PASS' deploy/translator/verify-full-cycle-zip-offline.py
+          grep -Fq 'stage_full_cycle_zip_http_auth_isolation=PASS' deploy/translator/verify-full-cycle-zip-offline.py
+          grep -Fq 'stage_full_cycle_zip_http_restart_readback=PASS' deploy/translator/verify-full-cycle-zip-offline.py
+          # Installation is forbidden unless the exact staged packet has
+          # completed every rootless offline smoke, including Full Cycle ZIP.
+          grep -Fq 'translator_stage_offline_acceptance=PASS' deploy/translator/verify-staged-release.sh
+          grep -Fq 'STAGED_SMOKE_SHA256' deploy/translator/verify-staged-release.sh
+          grep -Fq 'error=missing_accepted_offline_stage' deploy/translator/install-release.sh
+          grep -Fq 'error=stage_acceptance_packet_mismatch' deploy/translator/install-release.sh
           # Regression against staging a worker that would run without the
           # new Gemini budget or fail to verify independent vault escrow.
           grep -Fq 'assert store.claim_next(require_personal_key=True) is None' deploy/translator/verify-staged-release.sh

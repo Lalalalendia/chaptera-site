@@ -197,6 +197,23 @@ fi
 printf 'source_pilot_offhost_restore_gate=not_assessed\n'
 printf 'source_pilot_live_site_authorization_gate=not_assessed\n'
 printf 'source_pilot_no_mutations=yes\n'
+# Archive-only deployment requires both *effective* systemd unit environments,
+# not merely the files included in the incoming release packet.
+# Print only a boolean readiness value, never the actual Environment property.
+for entry in api:chaptera-translator-api.service worker:chaptera-translator-worker.service; do
+  label="${entry%%:*}"
+  name="${entry#*:}"
+  environment=''
+  if command -v systemctl >/dev/null 2>&1; then
+    environment="$(systemctl show --property=Environment --value "$name" 2>/dev/null || true)"
+  fi
+  if [[ " $environment " == *" CHAPTERA_ARCHIVE_ONLY=1 "* ]]; then
+    printf 'archive_only_%s_unit=ready\n' "$label"
+  else
+    printf 'archive_only_%s_unit=requires_bootstrap\n' "$label"
+  fi
+done
+
 # RUST-MIGRATION-01: ACTUAL resident memory of Python API and worker.
 # No process command line, environment, secrets, source text or PID logged.
 printf 'rust_baseline_schema=erida.python-process-memory.v1\n'

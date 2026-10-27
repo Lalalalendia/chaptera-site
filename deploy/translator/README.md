@@ -1,9 +1,176 @@
 # Private Ararra translator deployment — VPS
 
+## 27 October 2026 — archive-only Erida candidate: no web parser
+
+**Owner decision:** site parsing remains in Full Cycle App; this VPS accepts
+`full_cycle_app.chapter_exchange` v1 ZIP and retains editing, book library,
+Gemini and consented Google Drive export. See upstream
+[ararra PR #157](https://github.com/Lalalalendia/ararra/pull/157) **MERGED**
+(`main@c3d7e544d70732525ea0ce0f8e39703106ea6476`) after successful
+Python 3.11/3.12, Web, Chromium, Rust and Windows tests. Both staged source
+SHA references now point to this exact commit. **No VPS install yet.**
+
+Both `chaptera-translator-api.service` and the separate translation worker
+are configured with `CHAPTERA_ARCHIVE_ONLY=1`. Build and manual staging use
+`CHAPTERA_ARCHIVE_ONLY_BUILD=1` to exclude web-crawler Python and browser
+modules from the wheel. All parser process entrypoints fail closed; the source
+collector systemd unit remains separately inactive. Existing source checkpoint
+tables and old book data are preserved, not deleted.
+
+In both stage paths, `verify-full-cycle-zip-offline.py` must verify the
+**installed** lean wheel: source modules absent, `/v1/source-books/*` unavailable,
+3-chapter desktop ZIP imported over real in-process HTTP API, original and
+working text preserved in disposable SQLite. The old crawler one-shot smoke
+is intentionally replaced by explicit archive-only fail-closed proof; other
+Gemini/Drive/SQLite/backup isolated acceptance checks stay in place. Installer
+additionally rejects an already active legacy source-worker service.
+
+Public Python 3.11/3.12 exact-head tests measured wheel size:
+454,872 bytes full vs 363,343 bytes archive-only, saving 91,529 bytes (20.1%
+of the wheel, **excluding dependencies**). The installed lean wheel passed
+ZIP preview and missing-crawler tests. This says nothing quantitative about
+live VPS RSS/PSS: the source-worker was already inactive and API memory must
+be remeasured under the same conditions before a resource claim.
+
+**Production status:** no new VPS stage, `install=YES`, service restart,
+OAuth/Google Drive write or user database changes from this candidate.
+Physical RAM limits, independently verified encrypted off-host backup and
+recovery, exact SHA, Reader health and rollback proof remain mandatory.
+
+## 27 October 2026 — read-only VPS preflight without GitHub Actions
+
+Before attempting to stage anything, from a trusted Linux/WSL2 workstation
+that already has the audited repository branch and a verified SSH host key:
+
+```bash
+bash deploy/translator/manual-host-preflight-no-actions.sh chaptera-deploy@YOUR_VPS_HOST
+```
+
+This runs the existing `host-preflight.sh` over the trusted SSH session
+using stdin, then checks the read-only completion and source-pilot resource
+markers. It performs **no upload, installation, service restart, secret read,
+production SQLite access or billed translation**. The host probe's public
+unauthenticated model-endpoint connectivity check is a network GET; it does
+not send a Gemini credential or generate paid text.
+
+`translator_readonly_resource_preflight=PASS` only means current
+resource/collector readiness. It explicitly prints
+`translator_offhost_restore_gate=NOT_ASSESSED`: a real, independently
+recoverable backup, escrowed keys, fresh backup restore, operator acceptance,
+site CI and deployment activation are **not** inferred. If resources are
+insufficient or the remote report is missing a required marker, this wrapper
+exits nonzero and leaves the VPS unchanged.
+
+## 27 October 2026 — staging when private GitHub Actions minutes are exhausted
+
+The private `chaptera-site` repository cannot allocate GitHub-hosted runners
+while its included 2,000 Actions minutes are exhausted. A failed job with zero
+runner steps is not a failed source-code test. Do not repeatedly rerun it or
+weaken production release/backup guards to compensate.
+
+A **stage-only, Actions-independent** path is available in this PR branch.
+On a trusted Linux / WSL2 workstation (Git, Python 3.12, SSH, curl, tar and
+outbound internet required), check out this branch and run:
+
+```bash
+bash deploy/translator/manual-stage-no-actions.sh chaptera-deploy@YOUR_VPS_HOST
+```
+
+The command reads the single agreed source SHA directly from the two
+`ARARRA_SHA` entries in this branch's `translator-service.yml` (currently
+`c3d7e544d70732525ea0ce0f8e39703106ea6476`). It refuses divergent
+pins, unproven/non-main commits, missing MVP consent/TXT modules, or missing
+VPS MVP smoke code. The release includes only the merge-proven
+`ararra/main` snapshot; no unreviewed branch is packaged.
+
+The script uses the workstation's existing SSH identity and **previously
+verified** `known_hosts` entry. It never asks for, prints, exports or copies
+SSH private keys, Google OAuth credentials, Gemini keys or server secrets.
+It runs Python tests, architecture validation, verified real-chapter offline
+mock, creates a SHA256-verified offline wheelhouse, transfers it to the
+deploy user's `~/chaptera-translator-incoming/<SHA>/`, and invokes the
+existing transient `verify-staged-release.sh` on the VPS.
+
+**No install/restart/timer enable/production SQLite write/paid Gemini/Google
+Drive write is performed.** A successful stage is **not** a full Chromium CI
+replacement, genuine off-host backup recovery, or authority to deploy
+production. Those checks plus independent operator approval remain required
+before using the separately guarded `install-release.sh`. The production
+runner must not be installed on this memory-constrained VPS.
+
+
 This is a dedicated service deployment, **not** a public Chaptera site release.
 It never changes Reader binaries, Nginx, the landing, or the Reader database.
 
-## Current release candidate — 20 October 2026 (not automatically installed)
+## 27 October 2026 — original Full Cycle ZIP importer milestone (superseded pin)
+
+- The initial ZIP integration pinned
+  `ararra@1bc65fc4624e1539c402df465407ebcee38f651f`, now superseded
+  by archive-only `ararra@c3d7e544d70732525ea0ce0f8e39703106ea6476`,
+  after upstream [#156](https://github.com/Lalalalendia/ararra/pull/156)
+  was merged with exact-head Python 3.11/3.12, Web, Chromium and native Rust UI
+  checks successful. Upstream [#151](https://github.com/Lalalalendia/ararra/pull/151),
+  [#153](https://github.com/Lalalalendia/ararra/pull/153),
+  [#154](https://github.com/Lalalalendia/ararra/pull/154), and
+  [#155](https://github.com/Lalalalendia/ararra/pull/155) implement the source
+  ZIP parser, validation and operator review.
+- The Full Cycle importer reads `full_cycle_app.chapter_exchange` v1
+  `kind=source` archives from `manifest.json` (identity, original and working
+  text, SHA-256, irregular ordering/gaps). It requires explicit create/replace/skip
+  decisions and does not start Gemini, Drive, or source-site scraping.
+- The build guard now demands the archive importer, documented contract, both
+  offline test suites and the ZIP fixture produced by the original Full Cycle
+  exporter. Both the GitHub workflow and the no-Actions stage path run upstream
+  `pytest -q` on the exact pinned source.
+- The staged package includes a SHA-256-checksummed Full Cycle App exporter
+  fixture and `verify-full-cycle-zip-offline.py`. After installing the pinned
+  wheel into a disposable venv on the staging machine, the smoke tests
+  `manifest.json` chapter identity, original/working hashes, preview, stage,
+  atomic confirmation and SQLite raw-copy recovery after opening a fresh store.
+  The same installed-wheel stage probe also uses in-process ASGI HTTP to
+  verify `/v1/imports/preview`, `/v1/imports/stages`, `/confirm`, unauthenticated
+  rejection, cross-operator isolation and post-restart raw-original readback;
+  no TCP listener or external network is opened.
+  The code explicitly refuses socket connections and never uses production data.
+- A successful complete offline smoke writes `STAGED_SMOKE_SHA256` in the
+  incoming slot with the exact Ararra source SHA and wheelhouse SHA-256. The
+  receipt is removed at the beginning of a new stage run, so a failed retry
+  cannot leave stale PASS evidence. `install-release.sh` rejects absent,
+  malformed, wrong-source or wrong-packet receipts before touching systemd.
+  The receipt is an operational acceptance gate for the trusted deploy user,
+  **not** a cryptographic identity or a substitute for independent backup proof.
+  A local packet-integrity check and receipt guard negative tests passed;
+  actual VPS smoke and private site CI remain unverified.
+- **Not installed on the VPS:** private site CI is blocked by exhausted hosted
+  runner minutes. Use the reviewed, stage-only `manual-stage-no-actions.sh`
+  from a trusted workstation with previously verified SSH access; require
+  successful offline VPS stage, current backup/restore proof, resource/health
+  preflight and explicit separately gated `install=YES` before activation.
+  This documentation update itself transfers no files and changes no services.
+
+## 25 October 2026 — ERIDA MVP staged candidate (not installed)
+
+- The build and isolated rootless stage now pin
+  `ararra@0b793ed1e8314abd0d286cb1cd9d7b1c11d3931e`, including merged [PR #144](https://github.com/Lalalalendia/ararra/pull/144).
+  The authoritative pin is `translator-service.yml`.
+- The source contains the user scenario: upload one TXT with 1..N chapters,
+  review chapter splitting, explicitly confirm Gemini, request per-chapter
+  Google Drive delivery and receive readable UTF-8 `Глава NNN.txt` rather
+  than literal HTML tags. Non-consented historical exports remain unchanged.
+- Pull requests run **offline build/testing only**. A push to site `main` may
+  upload a checksum-verified **incoming staged archive** to the VPS, but
+  cannot install/activate services without a separate manually authorized
+  `workflow_dispatch install=YES`. The *currently installed* VPS version
+  is not proven by this document.
+- The existing `chaptera-translator-drive-export.service` is a legacy
+  operator-wide selector; **do not enable it as the MVP consent-only exporter**
+  until an independently reviewed service explicitly selects
+  `--consented-only`. No service, OAuth credentials, shared Drive root,
+  production database, or remote files change in this source-only update.
+- Remaining launch gate: owner-approved root folder and isolated real
+  file→Gemini→Drive pilot with separate TXT and failure/retry checks.
+
+## Historical release candidate — 20 October 2026 (not automatically installed)
 
 - **Source pin for CI and rootless VPS staging:** `ararra@ed9f0d2cf238b92944d2b0c82a462a3d041e6a4d`, package `0.6.2`.
   The GitHub Actions workflow, not this historical README, is the authoritative pin.

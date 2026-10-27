@@ -7,11 +7,13 @@ on:
       - '.github/workflows/translator-host-preflight.yml'
       - '.github/workflows/translator-service.yml'
       - 'deploy/translator/host-preflight.sh'
+      - 'deploy/translator/manual-host-preflight-no-actions.sh'
   pull_request:
     paths:
       - '.github/workflows/translator-host-preflight.yml'
       - '.github/workflows/translator-service.yml'
       - 'deploy/translator/host-preflight.sh'
+      - 'deploy/translator/manual-host-preflight-no-actions.sh'
   workflow_dispatch:
 
 permissions:
@@ -31,6 +33,10 @@ jobs:
         run: |
           set -euo pipefail
           bash -n deploy/translator/host-preflight.sh
+          bash -n deploy/translator/manual-host-preflight-no-actions.sh
+          grep -Fq 'StrictHostKeyChecking=yes' deploy/translator/manual-host-preflight-no-actions.sh
+          grep -Fq 'translator_offhost_restore_gate=NOT_ASSESSED' deploy/translator/manual-host-preflight-no-actions.sh
+          grep -Fq 'source_pilot_no_mutations=yes' deploy/translator/manual-host-preflight-no-actions.sh
           ! grep -Eq '(^|[[:space:]])(apt|apt-get|pip|docker[[:space:]]+(run|pull)|rm|mv|cp|mkdir|systemctl[[:space:]]+(enable|start|restart|stop)|sudo[[:space:]]+(bash|sh))([[:space:]]|$)' deploy/translator/host-preflight.sh
           grep -Fq 'source_pilot_memory_floor_mib=512' deploy/translator/host-preflight.sh
           grep -Fq 'source_pilot_disk_floor_mib=1536' deploy/translator/host-preflight.sh
@@ -41,6 +47,9 @@ jobs:
           grep -Fq 'source_pilot_no_mutations=yes' deploy/translator/host-preflight.sh
           grep -Fq 'rust_baseline_schema=erida.python-process-memory.v1' deploy/translator/host-preflight.sh
           grep -Fq 'rust_baseline_no_mutations=yes' deploy/translator/host-preflight.sh
+          grep -Fq 'archive_only_%s_unit=ready' deploy/translator/host-preflight.sh
+          grep -Fq 'archive_only_%s_unit=requires_bootstrap' deploy/translator/host-preflight.sh
+          grep -Fq 'systemctl show --property=Environment --value' deploy/translator/host-preflight.sh
 
   preflight:
     needs: validate

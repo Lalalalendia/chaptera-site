@@ -19,6 +19,26 @@ if [[ ! -f "$slot/translator-wheelhouse.tar.gz" || ! -f "$slot/translator-wheelh
   echo 'error=missing_wheelhouse_packet' >&2; exit 2
 fi
 (cd "$slot" && sha256sum -c translator-wheelhouse.sha256 --status)
+# Do not activate a wheelhouse that was uploaded but never successfully
+# exercised by the transient offline suite (including Full Cycle source ZIP).
+# Bind acceptance to BOTH upstream source SHA and the exact packet bytes.
+acceptance="$slot/STAGED_SMOKE_SHA256"
+[[ -s "$acceptance" ]] || { echo 'error=missing_accepted_offline_stage' >&2; exit 3; }
+[[ "$(wc -l < "$acceptance")" == 1 ]] || { echo 'error=invalid_stage_acceptance_record' >&2; exit 3; }
+accepted_source=''
+accepted_packet=''
+accepted_extra=''
+read -r accepted_source accepted_packet accepted_extra < "$acceptance" || {
+  echo 'error=unreadable_stage_acceptance' >&2; exit 3
+}
+if [[ "$accepted_source" != "$sha" || ! "$accepted_packet" =~ ^[0-9a-f]{64}$ || -n "$accepted_extra" ]]; then
+  echo 'error=stage_acceptance_source_mismatch' >&2; exit 3
+fi
+actual_packet="$(sha256sum "$slot/translator-wheelhouse.tar.gz" | awk '{print $1}')"
+[[ "$actual_packet" == "$accepted_packet" ]] || {
+  echo 'error=stage_acceptance_packet_mismatch' >&2; exit 3
+}
+printf 'translator_stage_acceptance=PASS\n'
 available="$(awk '/^MemAvailable:/ { print int($2/1024) }' /proc/meminfo)"
 if [[ ! "$available" =~ ^[0-9]+$ ]] || (( available < 320 )); then
   echo 'error=insufficient_available_memory_for_persistent_services' >&2; exit 3
@@ -33,6 +53,24 @@ fi
 for name in chaptera-translator-api.service chaptera-translator-worker.service; do
   test -f "/etc/systemd/system/$name" || { echo "error=missing_$name" >&2; exit 3; }
 done
+# An existing, bootstrapped unit may predate the archive-only wheel.
+# A slim wheel cannot start in legacy full-mode: verify the *effective*
+# systemd environment before switching current or restarting anything.
+# The root-owned unit must be updated through a separately approved bootstrap.
+for name in chaptera-translator-api.service chaptera-translator-worker.service; do
+  effective_env="$(systemctl show --property=Environment --value "$name" 2>/dev/null || true)"
+  if [[ " $effective_env " != *" CHAPTERA_ARCHIVE_ONLY=1 "* ]]; then
+    echo "error=missing_archive_only_runtime_unit_$name" >&2
+    exit 3
+  fi
+done
+# The archive-only wheel intentionally does not contain source-worker code.
+# A previously enabled crawler must be stopped by an independently reviewed
+# administrative action; this deploy must never silently disable it.
+if systemctl is-active --quiet chaptera-translator-source-worker.service; then
+  echo 'error=active_legacy_source_worker_forbidden_in_archive_release' >&2
+  exit 3
+fi
 previous=''
 if [[ -L "$root/current" ]]; then
   previous="$(readlink -f "$root/current" 2>/dev/null || true)"
