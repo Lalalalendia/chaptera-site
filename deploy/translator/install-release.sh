@@ -53,6 +53,13 @@ fi
 for name in chaptera-translator-api.service chaptera-translator-worker.service; do
   test -f "/etc/systemd/system/$name" || { echo "error=missing_$name" >&2; exit 3; }
 done
+# The archive-only wheel intentionally does not contain source-worker code.
+# A previously enabled crawler must be stopped by an independently reviewed
+# administrative action; this deploy must never silently disable it.
+if systemctl is-active --quiet chaptera-translator-source-worker.service; then
+  echo 'error=active_legacy_source_worker_forbidden_in_archive_release' >&2
+  exit 3
+fi
 previous=''
 if [[ -L "$root/current" ]]; then
   previous="$(readlink -f "$root/current" 2>/dev/null || true)"
