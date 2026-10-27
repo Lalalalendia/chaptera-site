@@ -71,6 +71,11 @@ for path in src/chaptera_server/batch_drive_consent.py \
 done
 grep -Fq -- '--consented-only' "$work/ararra/src/chaptera_server/cli.py" || fail 'missing_consented_only_selector'
 grep -Fq 'full_cycle_app.chapter_exchange' "$work/ararra/docs/RE02_FULL_CYCLE_ARCHIVE_IMPORT.md" || fail 'missing_full_cycle_zip_contract'
+for path in setup.py src/chaptera_server/source_runtime.py docs/RE02_ARCHIVE_ONLY_RELEASE.md tests/test_archive_only_runtime.py tools/check_archive_only_wheel.py; do
+  [[ -s "$work/ararra/$path" ]] || fail "missing_archive_only_source_$path"
+done
+grep -Fq 'CHAPTERA_ARCHIVE_ONLY_BUILD' "$work/ararra/setup.py" || fail 'archive_only_build_optin_missing'
+grep -Fq 'CHAPTERA_ARCHIVE_ONLY' "$work/ararra/src/chaptera_server/config.py" || fail 'archive_only_runtime_flag_missing'
 
 
 python3.12 -m venv "$work/build-venv"
@@ -82,7 +87,7 @@ python3.12 -m venv "$work/build-venv"
   "$work/build-venv/bin/python" tools/check_architecture.py
 )
 mkdir -p "$work/packet/wheelhouse"
-"$work/build-venv/bin/python" -m pip wheel --disable-pip-version-check --no-input \
+CHAPTERA_ARCHIVE_ONLY_BUILD=1 "$work/build-venv/bin/python" -m pip wheel --disable-pip-version-check --no-input \
   --wheel-dir "$work/packet/wheelhouse" "$work/ararra[offsite-s3]"
 "$work/build-venv/bin/python" -m pip wheel --disable-pip-version-check --no-input \
   --wheel-dir "$work/packet/wheelhouse" pip
