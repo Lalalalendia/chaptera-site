@@ -132,7 +132,7 @@ scp -o BatchMode=yes -o StrictHostKeyChecking=yes "${files[@]}" \
 ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" \
   "cd 'chaptera-translator-incoming/$sha' && sha256sum -c translator-wheelhouse.sha256 --status && sha256sum -c fixture-086.sha256 --status"
 ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" \
-  "bash 'chaptera-translator-incoming/$sha/verify-staged-release.sh' '$sha'"
+  "bash 'chaptera-translator-incoming/$sha/verify-staged-release.sh' '$sha' && test -s 'chaptera-translator-incoming/$sha/STAGED_SMOKE_SHA256'"
 printf 'manual_staging=PASS\n'
 printf 'production_install=no\n'
 printf 'production_api_worker_restarted=no\n'
