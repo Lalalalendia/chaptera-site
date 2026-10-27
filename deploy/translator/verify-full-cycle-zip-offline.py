@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import hashlib
+import importlib.util
 import io
 import json
 import socket
@@ -44,6 +45,8 @@ def main() -> None:
     installed = Path(chaptera_server.__file__ or "").resolve()
     if not installed.is_relative_to(Path(sys.prefix).resolve()):
         raise AssertionError("Package did not load from the staged wheel venv")
+    if importlib.util.find_spec("chaptera_server.source_runtime") is not None:
+        raise AssertionError("Web crawler modules leaked into archive-only wheel")
 
     b64 = "".join(fixture.read_text(encoding="ascii").split())
     raw = base64.b64decode(b64, validate=True)
@@ -130,7 +133,7 @@ def main() -> None:
             "operator": "offline-operator-fixture-only",
             "other": "offline-other-fixture-only",
         },
-        admin_member_id="chief",
+        admin_member_id="chief", archive_only=True,
     )
     app = create_app(http_settings, http_store)
     files = {"file": ("full-cycle-export.zip", raw, "application/zip")}
@@ -151,6 +154,10 @@ def main() -> None:
             details = preview_http.json()
             assert details["source_archive"]["boundaries"] == "manifest"
             assert details["chapter_count"] == 3 and details["stored"] is False
+            crawler = await client.get("/v1/source-books/sites", headers=headers)
+            assert crawler.status_code == 404, crawler.text
+            assert not hasattr(app.state, "public_source_fetcher")
+            assert not hasattr(app.state, "source_job_store")
             with http_store._connect() as db:
                 assert db.execute("SELECT COUNT(*) FROM books").fetchone()[0] == 0
             uploaded = await client.post(
@@ -217,6 +224,8 @@ def main() -> None:
     print("stage_full_cycle_zip_http_preview_import=PASS")
     print("stage_full_cycle_zip_http_auth_isolation=PASS")
     print("stage_full_cycle_zip_http_restart_readback=PASS")
+    print("stage_archive_only_http_crawler_routes=DENIED")
+    print("stage_archive_only_source_modules=ABSENT")
 
     print("stage_full_cycle_zip_exporter_v1=PASS")
     print("stage_full_cycle_zip_atomic_import=PASS")
