@@ -58,6 +58,21 @@ PYTHONPATH="$pip_wheel" "$work/venv/bin/python" -m pip install \
   --find-links "$work/unpacked/wheelhouse" \
   'chaptera-server-translator[offsite-s3]==0.6.2' > /dev/null
 
+# RE-02: test the installed wheel against a SHA-256-pinned source ZIP produced
+# by the actual Full Cycle App exporter, not a fabricated heading-based TXT.
+# Both the fixture and this Python probe were integrity-checked above as part
+# of the wheelhouse packet. The probe owns a disposable database only; network
+# attempts are rejected, and no production SQLite, secrets or credentials load.
+[[ -s "$work/unpacked/full-cycle-exporter.zip.b64" && \
+   -s "$work/unpacked/verify-full-cycle-zip-offline.py" ]] || {
+  echo 'error=missing_full_cycle_zip_stage_proof' >&2
+  exit 3
+}
+env -u CHAPTERA_GEMINI_API_KEY -u CREDENTIALS_DIRECTORY \
+  timeout 90s nice -n 10 "$work/venv/bin/python" \
+  "$work/unpacked/verify-full-cycle-zip-offline.py" \
+  "$work/unpacked/full-cycle-exporter.zip.b64" "$work"
+
 for transport in html_v0 atoms_v1; do
   env -u CHAPTERA_GEMINI_API_KEY -u CREDENTIALS_DIRECTORY \
     timeout 90s nice -n 10 "$work/venv/bin/chaptera-smoke" \
