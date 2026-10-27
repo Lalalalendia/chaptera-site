@@ -60,6 +60,21 @@ It never changes Reader binaries, Nginx, the landing, or the Reader database.
   offline test suites and the ZIP fixture produced by the original Full Cycle
   exporter. Both the GitHub workflow and the no-Actions stage path run upstream
   `pytest -q` on the exact pinned source.
+- The staged package includes a SHA-256-checksummed Full Cycle App exporter
+  fixture and `verify-full-cycle-zip-offline.py`. After installing the pinned
+  wheel into a disposable venv on the staging machine, the smoke tests
+  `manifest.json` chapter identity, original/working hashes, preview, stage,
+  atomic confirmation and SQLite raw-copy recovery after opening a fresh store.
+  The code explicitly refuses socket connections and never uses production data.
+- A successful complete offline smoke writes `STAGED_SMOKE_SHA256` in the
+  incoming slot with the exact Ararra source SHA and wheelhouse SHA-256. The
+  receipt is removed at the beginning of a new stage run, so a failed retry
+  cannot leave stale PASS evidence. `install-release.sh` rejects absent,
+  malformed, wrong-source or wrong-packet receipts before touching systemd.
+  The receipt is an operational acceptance gate for the trusted deploy user,
+  **not** a cryptographic identity or a substitute for independent backup proof.
+  A local packet-integrity check and receipt guard negative tests passed;
+  actual VPS smoke and private site CI remain unverified.
 - **Not installed on the VPS:** private site CI is blocked by exhausted hosted
   runner minutes. Use the reviewed, stage-only `manual-stage-no-actions.sh`
   from a trusted workstation with previously verified SSH access; require
