@@ -5,9 +5,10 @@
 **Owner decision:** site parsing remains in Full Cycle App; this VPS accepts
 `full_cycle_app.chapter_exchange` v1 ZIP and retains editing, book library,
 Gemini and consented Google Drive export. See upstream
-[ararra PR #157](https://github.com/Lalalalendia/ararra/pull/157) (currently
-Draft). **Do not switch the pinned source until #157 is merged with exact-head
-CI success; staging/installation remain blocked until other gates pass.**
+[ararra PR #157](https://github.com/Lalalalendia/ararra/pull/157) **MERGED**
+(`main@c3d7e544d70732525ea0ce0f8e39703106ea6476`) after successful
+Python 3.11/3.12, Web, Chromium, Rust and Windows tests. Both staged source
+SHA references now point to this exact commit. **No VPS install yet.**
 
 Both `chaptera-translator-api.service` and the separate translation worker
 are configured with `CHAPTERA_ARCHIVE_ONLY=1`. Build and manual staging use
@@ -77,10 +78,10 @@ bash deploy/translator/manual-stage-no-actions.sh chaptera-deploy@YOUR_VPS_HOST
 
 The command reads the single agreed source SHA directly from the two
 `ARARRA_SHA` entries in this branch's `translator-service.yml` (currently
-`1bc65fc4624e1539c402df465407ebcee38f651f`). It refuses divergent
+`c3d7e544d70732525ea0ce0f8e39703106ea6476`). It refuses divergent
 pins, unproven/non-main commits, missing MVP consent/TXT modules, or missing
-VPS MVP smoke code. The latest `ararra` UI-only PR #145 is **not** included
-until the release pin is explicitly updated and rechecked.
+VPS MVP smoke code. The release includes only the merge-proven
+`ararra/main` snapshot; no unreviewed branch is packaged.
 
 The script uses the workstation's existing SSH identity and **previously
 verified** `known_hosts` entry. It never asks for, prints, exports or copies
@@ -101,10 +102,11 @@ runner must not be installed on this memory-constrained VPS.
 This is a dedicated service deployment, **not** a public Chaptera site release.
 It never changes Reader binaries, Nginx, the landing, or the Reader database.
 
-## 27 October 2026 — Full Cycle App ZIP importer included in staging candidate (not installed)
+## 27 October 2026 — original Full Cycle ZIP importer milestone (superseded pin)
 
-- The source pin in `translator-service.yml` now points to
-  `ararra@1bc65fc4624e1539c402df465407ebcee38f651f`,
+- The initial ZIP integration pinned
+  `ararra@1bc65fc4624e1539c402df465407ebcee38f651f`, now superseded
+  by archive-only `ararra@c3d7e544d70732525ea0ce0f8e39703106ea6476`,
   after upstream [#156](https://github.com/Lalalalendia/ararra/pull/156)
   was merged with exact-head Python 3.11/3.12, Web, Chromium and native Rust UI
   checks successful. Upstream [#151](https://github.com/Lalalalendia/ararra/pull/151),
