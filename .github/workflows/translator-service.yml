@@ -208,9 +208,11 @@ jobs:
           grep -Fq 'archive_only=True' deploy/translator/verify-full-cycle-zip-offline.py
           # Timotxt source-worker remains disabled by the normal installer.
           # Do not enable the optional source-worker in the normal rollout.
-          if grep -Eq 'source-worker.service|source-collection-enabled' deploy/translator/install-release.sh; then
+          # Reading the legacy unit's active state is allowed; starting it is not.
+          if grep -Eq 'systemctl[[:space:]]+(enable|start|restart).*source-worker|touch[[:space:]].*source-collection-enabled' deploy/translator/install-release.sh; then
             echo 'error=source_worker_activation_forbidden' >&2; exit 2
           fi
+          grep -Fq 'error=active_legacy_source_worker_forbidden_in_archive_release' deploy/translator/install-release.sh
           if grep -Fq 'class="workspace-actions"' ararra/src/chaptera_server/web_ui/templates/shell.html; then
             echo 'error=detached_logout_row_forbidden' >&2; exit 2
           fi
