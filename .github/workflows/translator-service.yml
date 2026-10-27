@@ -303,6 +303,7 @@ jobs:
           grep -Fq 'assert store.claim_next(require_personal_key=True) is None' deploy/translator/verify-staged-release.sh
           grep -Fq 'stage_personal_gemini_vault_recovery=PASS' deploy/translator/verify-staged-release.sh
           grep -Fq 'stage_personal_gemini_rpd_caps=PASS' deploy/translator/verify-staged-release.sh
+          grep -Fq 'gemini_reserved_output_tokens=0, archive_only=True,' deploy/translator/verify-staged-release.sh
           # RE-02 first-pilot acceptance must remain synthetic and isolated.
           grep -Fq 'stage_archive_only_crawler_routes=DENIED' deploy/translator/verify-staged-release.sh
           grep -Fq 'stage_archive_only_modules=ABSENT' deploy/translator/verify-staged-release.sh
@@ -458,6 +459,7 @@ jobs:
           grep -Fq 'assert store.claim_next(require_personal_key=True) is None' deploy/translator/verify-staged-release.sh
           grep -Fq 'stage_personal_gemini_vault_recovery=PASS' deploy/translator/verify-staged-release.sh
           grep -Fq 'stage_personal_gemini_rpd_caps=PASS' deploy/translator/verify-staged-release.sh
+          grep -Fq 'gemini_reserved_output_tokens=0, archive_only=True,' deploy/translator/verify-staged-release.sh
           python -m py_compile deploy/translator/pilot-chapter-offline.py
       - name: Configure pinned SSH identity
         env:

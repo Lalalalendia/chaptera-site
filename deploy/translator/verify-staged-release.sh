@@ -564,7 +564,7 @@ personal_db = work / "temporary-personal-keys.sqlite3"
 config = Settings(
     db_path=personal_db, team_tokens={"moda": "test-only-token-a", "modb": "test-only-token-b"},
     gemini_vault_key=master, gemini_rpm=0, gemini_tpm=0,
-    gemini_reserved_output_tokens=0,
+    gemini_reserved_output_tokens=0, archive_only=True,
 )
 store = QueueStore(config.db_path)
 create_app(config, store)
