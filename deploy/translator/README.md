@@ -1,5 +1,38 @@
 # Private Ararra translator deployment — VPS
 
+## 29 October 2026 — development-only mode, previous VPS retired
+
+**Current owner decision:** the old VPS is unavailable. No SSH, staging,
+production deployment, Reader/public-edge acceptance, paid Gemini, or real
+Google Drive backup is authorized or possible on that host. Earlier VPS
+staging PASS reports (including #40583285638) are historical evidence only;
+they do not prove any service or customer data still exists on a live host.
+Recovery of old SQLite, backup keys and OAuth credentials is **unknown**.
+
+All jobs that contact the prior server or probe its public endpoints are
+statically blocked with `if: ${{ false }}`. This includes periodic Reader
+deployment and TTL jobs, manual deployment dispatches, private translator
+staging, HTTP loopback checks, site/Reader static publish, and the public
+edge-header witness. The always-running
+`deploy/translator/check-no-vps-mode.py` guard in `validate.yml`
+rejects accidental reactivation. Retained offline jobs build/test ZIP import,
+source-less wheels, Reader/site static artifacts, mocks and security guards
+**only on GitHub runners**, with no production credentials or host access.
+The archived preflight/staging scripts remain as reference code but are not run.
+
+Development continues in `Lalalalendia/ararra` on
+`CHAPTERA_ARCHIVE_ONLY=1` and, for slim wheels,
+`CHAPTERA_ARCHIVE_ONLY_BUILD=1`. Parser input is from Full Cycle App ZIP;
+no source-web crawler is required on any future server.
+
+To resume a deployment, first provision a **new** host and separately verify
+data recovery, backup-key escrow, root-owned systemd units, 320 MiB minimum
+available memory, database restoration, credentials and full ZIP regression.
+Only then may an explicitly reviewed PR remove the all-false VPS job guards.
+GitHub `workflow_dispatch` alone cannot bypass this safety hold.
+
+---
+
 ## 27 October 2026 — archive-only Erida candidate: no web parser
 
 **Owner decision:** site parsing remains in Full Cycle App; this VPS accepts
