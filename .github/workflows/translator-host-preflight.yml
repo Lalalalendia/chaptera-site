@@ -53,7 +53,8 @@ jobs:
 
   preflight:
     needs: validate
-    if: github.event_name != 'pull_request'
+    # No active VPS. Keep offline preflight script validation only.
+    if: ${{ false }}
     runs-on: ubuntu-24.04
     environment: production
     timeout-minutes: 10

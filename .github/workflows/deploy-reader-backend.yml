@@ -34,6 +34,8 @@ concurrency:
 
 jobs:
   deploy:
+    # No VPS: scheduled and manual deployments cannot reach the retired host.
+    if: ${{ false }}
     runs-on: ubuntu-24.04
     environment: production
     timeout-minutes: 25

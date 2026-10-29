@@ -17,6 +17,8 @@ concurrency:
 
 jobs:
   http-probe:
+    # No active VPS. Never send SSH to retired host.
+    if: ${{ false }}
     runs-on: ubuntu-24.04
     environment: production
     timeout-minutes: 7

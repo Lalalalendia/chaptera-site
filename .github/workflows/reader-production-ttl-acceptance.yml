@@ -19,6 +19,8 @@ concurrency:
 
 jobs:
   ttl:
+    # Production TTL witness is meaningless without the public VPS.
+    if: ${{ false }}
     runs-on: ubuntu-24.04
     timeout-minutes: 75
     steps:

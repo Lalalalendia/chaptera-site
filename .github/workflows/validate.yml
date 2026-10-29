@@ -15,6 +15,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Enforce no-VPS development-only policy
+        run: python3 deploy/translator/check-no-vps-mode.py
+
       - name: Reconstruct and validate canonical artifact
         shell: bash
         run: |

@@ -81,6 +81,8 @@ jobs:
 
   smoke:
     needs: build
+    # No active VPS. Offline build remains available for development.
+    if: ${{ false }}
     runs-on: ubuntu-24.04
     environment: production
     timeout-minutes: 12
