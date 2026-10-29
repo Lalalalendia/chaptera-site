@@ -195,6 +195,8 @@ jobs:
 
   public-edge-header-witness:
     name: Public Reader edge headers (read-only)
+    # Retired host: do not probe production edge while no VPS exists.
+    if: ${{ false }}
     runs-on: ubuntu-24.04
     timeout-minutes: 3
     steps:
