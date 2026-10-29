@@ -17,6 +17,8 @@ concurrency:
 
 jobs:
   deploy:
+    # Site deployment is paused: former VPS is unavailable.
+    if: ${{ false }}
     runs-on: ubuntu-latest
     environment: production
     steps:
