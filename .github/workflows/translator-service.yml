@@ -367,7 +367,8 @@ jobs:
 
   stage:
     needs: build
-    if: github.event_name != 'pull_request'
+    # No active VPS. Offline wheel build remains enabled; never SSH/install.
+    if: ${{ false }}
     runs-on: ubuntu-24.04
     environment: production
     timeout-minutes: 9
