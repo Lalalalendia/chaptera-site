@@ -18,6 +18,8 @@ concurrency:
 
 jobs:
   deploy:
+    # Static Reader publishing is paused without a working VPS.
+    if: ${{ false }}
     runs-on: ubuntu-latest
     environment: production
     steps:
